@@ -64,23 +64,63 @@ class ChessPiece {
     const ctx = this.ctx
     const x = this.position.x * this.gridSize + this.gridSize / 2
     const y = this.position.y * this.gridSize + this.gridSize / 2
-    ctx.beginPath()
-    ctx.arc(x, y, this.radius, 0, Math.PI * 2)
-    ctx.fillStyle = this.color === 'red' ? '#f44336' : '#212121'
-    ctx.fill()
+    const pieceSize = this.gridSize * 1.1 // 棋子图片大小（略小于格子，留边距）
 
-    // 绘制内圆
-    ctx.beginPath()
-    ctx.arc(x, y, this.radius - 3, 0, Math.PI * 2)
-    ctx.strokeStyle = this.color === 'red' ? '#ffcccc' : '#666666'
-    ctx.lineWidth = 1
-    ctx.stroke()
+    // 关键：建立棋子汉字名称到英文文件名的映射表
+    const nameMap: Record<string, string> = {
+      俥: 'rook', // 红方车
+      車: 'rook', // 黑方车
+      傌: 'horse', // 红方马
+      馬: 'horse', // 黑方马
+      相: 'bishop', // 红方象
+      象: 'bishop', // 黑方象
+      仕: 'advisor', // 黑方士（敌方）
+      士: 'advisor', // 红方士（己方）
+      炮: 'cannon', // 炮（红黑通用名称）
+      兵: 'pawn', // 红方兵
+      卒: 'pawn', // 黑方卒
+      帥: 'king', // 红方帅
+      將: 'king', // 黑方将
+    }
 
-    ctx.fillStyle = this.color === 'red' ? '#ffffff' : '#ffffff'
-    ctx.font = 'bold 20px SimHei, Arial'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(this.name, x, y)
+    // 根据当前棋子的汉字名称获取对应的英文文件名
+    const englishName = nameMap[this.name]
+    if (!englishName) {
+      console.error(`未找到棋子${this.name}的映射关系`)
+      this.drawFallback(x, y) // 降级绘制
+      return
+    }
+    // 生成正确的图片文件名（例如 red_horse.png）
+    const imageName = `${this.color}_${englishName}.png`
+    const img = new Image()
+    img.src = `/chess/images/${imageName}`// 修正后的路径 // public目录下的路径
+
+    // 图片加载完成后绘制
+    img.onload = () => {
+      // 清除原有位置（避免残影）
+      this.clearFromCanvas()
+      // 绘制图片（居中显示）
+      ctx.drawImage(
+        img,
+        x - pieceSize / 2, // 图片左上角x
+        y - pieceSize / 2, // 图片左上角y
+        pieceSize, // 图片宽度
+        pieceSize, // 图片高度
+      )
+    }
+  }
+
+  private drawFallback(x: number, y: number) {
+    // 保留原有的圆形+文字绘制逻辑
+    this.ctx.beginPath()
+    this.ctx.arc(x, y, this.radius, 0, Math.PI * 2)
+    this.ctx.fillStyle = this.color === 'red' ? '#f44336' : '#212121'
+    this.ctx.fill()
+    this.ctx.fillStyle = '#ffffff'
+    this.ctx.font = 'bold 20px SimHei, Arial'
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
+    this.ctx.fillText(this.name, x, y)
   }
 
   private clearFromCanvas() {
@@ -407,7 +447,7 @@ class Cannon extends ChessPiece {
     x: number,
     gridSize: number = 50,
   ) {
-    const name = color === 'red' ? '炮' : '砲'
+    const name = '炮'
     const y = role === 'enemy' ? 2 : 7
     super(ctx, id, name, color, role, { x, y }, gridSize)
   }
