@@ -408,11 +408,19 @@ class ChessBoard {
 
   private drawBoard() {
     this.background.clearRect(0, 0, this.width, this.height)
+    const boardImg = new Image()
+    boardImg.src = '/chess/images/bg.png'
+    // 图片加载成功时绘制图片
+    boardImg.onload = () => {
+      // 绘制图片覆盖整个棋盘区域（与canvas尺寸一致）
+      this.background.drawImage(boardImg, 0, 0, this.width, this.height)
+    }
+
     this.background.strokeStyle = '#000'
     this.background.lineWidth = 2
 
     // Set background color
-    this.background.fillStyle = '#f4d1a4'
+    // this.background.fillStyle = '#f4d1a4'
     this.background.fillRect(0, 0, this.width, this.height)
 
     const offsetX = this.gridSize / 2
