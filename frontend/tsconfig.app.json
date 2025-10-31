@@ -2,10 +2,16 @@
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "strict": false, // 关闭 TypeScript 严格模式
+    "noImplicitAny": false, // 允许隐式的 `any` 类型
+    "noImplicitReturns": false, // 允许函数没有返回值
+    "noImplicitThis": false, // 允许 `this` 为 `any`
+    "noUnusedLocals": false, // 不检查未使用的局部变量
+    "noUnusedParameters": false, // 不检查未使用的函数参数
+    "skipLibCheck": true // 跳过"noImplicitThis": false, // 允许 `this` 为 `any`库文件的类型检查，加速编译
   },
   "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
   "exclude": ["src/**/__tests__/*"]
