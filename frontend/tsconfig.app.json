@@ -5,6 +5,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+    "types": ["node"],
     "strict": false, // 关闭 TypeScript 严格模式
     "noImplicitAny": false, // 允许隐式的 `any` 类型
     "noImplicitReturns": false, // 允许函数没有返回值

@@ -22,6 +22,12 @@ interface GameEvents {
     from: position
     to: position
   }
+  'NET:CHESS:REGRET:REQUEST': Record<string, never> // 事件参数为空对象
+  'NET:CHESS:REGRET:RESPONSE': {
+    accepted: boolean
+  }
+  'NET:CHESS:REGRET:SUCCESS': Record<string, never>
+  'LOCAL:CHESS:REGRET:WAITING': Record<string, never> // 等待对方悔棋响应
 }
 
 type Listener<T> = (req: T) => void

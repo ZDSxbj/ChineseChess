@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import type { Ref } from 'vue'
 import type { WebSocketService } from '@/websocket'
-import { inject, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
-
+import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { showMsg } from '@/components/MessageBox'
+import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
 import channel from '@/utils/channel'
 
@@ -16,6 +17,47 @@ const isPC = inject('isPC') as Ref<boolean>
 
 let chessBoard: ChessBoard
 const ws = inject('ws') as WebSocketService
+
+const regretModalVisible = ref(false)
+const regretModalType = ref<'requesting' | 'responding'>('requesting')
+
+// 监听悔棋请求
+channel.on('NET:CHESS:REGRET:REQUEST', () => {
+  regretModalType.value = 'responding'
+  regretModalVisible.value = true
+})
+
+// 监听悔棋响应
+channel.on('NET:CHESS:REGRET:RESPONSE', (data) => {
+  regretModalVisible.value = false
+  if (data.accepted) {
+    // 对方同意悔棋，执行悔棋操作
+    chessBoard?.regretMove()
+    showMsg('对方同意悔棋')
+  }
+  else {
+    showMsg('对方拒绝悔棋')
+  }
+})
+
+// 监听悔棋成功
+channel.on('NET:CHESS:REGRET:SUCCESS', () => {
+  regretModalVisible.value = false
+  chessBoard?.regretMove()
+  showMsg('悔棋成功')
+})
+
+function handleRegretAccept() {
+  // 同意悔棋，通知对方
+  channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted: true })
+  // 自己也执行悔棋
+  chessBoard?.regretMove()
+}
+
+function handleRegretReject() {
+  // 拒绝悔棋，通知对方
+  channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted: false })
+}
 
 function decideSize(isPCBool: boolean) {
   return isPCBool ? 70 : 40
@@ -34,7 +76,19 @@ function quit() {
   giveUp()
   router.push('/')
 }
-
+// 新增悔棋函数
+function regret() {
+  if (chessBoard) {
+    if (chessBoard.isNetworkPlay()) {
+      // 联网模式：发送悔棋请求给对手
+      channel.emit('NET:CHESS:REGRET:REQUEST', {})
+    }
+    else {
+      // 本地模式：直接执行悔棋
+      chessBoard.regretMove()
+    }
+  }
+}
 onMounted(() => {
   const gridSize = decideSize(isPC.value)
   const canvasBackground = background.value as HTMLCanvasElement
@@ -72,7 +126,16 @@ onUnmounted(() => {
       <canvas ref="chesses" class="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/4" />
     </div>
     <div class="sm:h-full sm:w-1/5">
-      <!-- <button>悔棋</button> -->
+      <!-- 新增悔棋按钮 -->
+      <button
+        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+        text="black xl"
+        hover="bg-gray-9 text-gray-2"
+        @click="regret"
+      >
+        悔棋
+      </button>
+      <!-- 原有的认输按钮 -->
       <button
         class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
         text="black xl"
@@ -81,6 +144,7 @@ onUnmounted(() => {
       >
         认输
       </button>
+      <!-- 原有的退出按钮 -->
       <button
         class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
         text="black xl"
@@ -91,4 +155,11 @@ onUnmounted(() => {
       </button>
     </div>
   </div>
+  <RegretModal
+    :visible="regretModalVisible"
+    :type="regretModalType"
+    :onAccept="handleRegretAccept"
+    :onReject="handleRegretReject"
+    @close="regretModalVisible = false"
+  />
 </template>
