@@ -124,6 +124,8 @@ export function useWebSocket(): WebSocketService {
 
   const sendMessage = (message: WebSocketMessage) => {
     if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+      // 打印发送的消息
+      console.log('[WebSocket 发送]', message)
       socket.value.send(JSON.stringify(message))
     }
     else {
@@ -188,6 +190,11 @@ export function useWebSocket(): WebSocketService {
     }
 
     socket.value.onmessage = (event) => {
+      // 打印原始JSON字符串
+      console.log('[WebSocket 接收] 原始消息:', event.data)
+      // 解析后的数据
+      const data = JSON.parse(event.data)
+      console.log('[WebSocket 接收] 解析后消息:', data)
       eventHandler(JSON.parse(event.data))
     }
 

@@ -21,35 +21,6 @@ const ws = inject('ws') as WebSocketService
 const regretModalVisible = ref(false)
 const regretModalType = ref<'requesting' | 'responding'>('requesting')
 
-// 监听悔棋请求
-channel.on('NET:CHESS:REGRET:REQUEST', () => {
-  regretModalType.value = 'responding'
-  regretModalVisible.value = true
-})
-
-// 监听悔棋响应
-channel.on('NET:CHESS:REGRET:RESPONSE', (data) => {
-  regretModalVisible.value = false
-  if (data.accepted) {
-    // 对方同意悔棋，执行悔棋操作
-    const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
-    for (let i = 0; i < steps; i++) {
-      chessBoard?.regretMove()
-    }
-    showMsg('对方同意悔棋')
-  }
-  else {
-    showMsg('对方拒绝悔棋')
-  }
-})
-
-// 监听悔棋成功
-channel.on('NET:CHESS:REGRET:SUCCESS', () => {
-  regretModalVisible.value = false
-  chessBoard?.regretMove()
-  showMsg('悔棋成功')
-})
-
 function handleRegretAccept() {
   // 同意悔棋，通知对方
   ws.sendRegretResponse(true)
@@ -117,9 +88,31 @@ onMounted(() => {
     chessBoard.stop()
     chessBoard.start(color, true)
   })
+  // 监听悔棋请求
+  channel.on('NET:CHESS:REGRET:REQUEST', () => {
+    regretModalType.value = 'responding'
+    regretModalVisible.value = true
+  })
+  // 监听悔棋响应
+  channel.on('NET:CHESS:REGRET:RESPONSE', (data) => {
+    regretModalVisible.value = false
+    if (data.accepted) {
+      // 对方同意悔棋，执行悔棋操作
+      const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
+      for (let i = 0; i < steps; i++) {
+        chessBoard?.regretMove()
+      }
+      showMsg('对方同意悔棋')
+    }
+    else {
+      showMsg('对方拒绝悔棋')
+    }
+  })
 })
 onUnmounted(() => {
   channel.off('NET:GAME:START')
+  channel.off('NET:CHESS:REGRET:REQUEST')
+  channel.off('NET:CHESS:REGRET:RESPONSE')
   chessBoard?.stop()
 })
 </script>

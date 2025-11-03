@@ -26,7 +26,6 @@ class ChessBoard {
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
   }> = []
 
-  private moveCount: number = 0 // 记录总走棋数
   private lastResponseMoveCount: number = 0 // 上次对方走棋后的步数
   constructor(
     boardElement: HTMLCanvasElement,
@@ -112,7 +111,6 @@ class ChessBoard {
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
     })
     piece.move(to)
-    this.moveCount++
 
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
@@ -130,56 +128,29 @@ class ChessBoard {
     this.board[to.x][to.y] = piece
   }
 
-  // 悔棋方法
-  // public regret() {
-  //   if (this.isNetPlay) {
-  //     // 联网模式：发送悔棋请求给对手
-  //     channel.emit('NET:CHESS:REGRET:REQUEST', {})
-  //     // 显示等待提示框
-  //     // 这里需要通过事件通知Vue组件显示提示框
-  //     channel.emit('LOCAL:CHESS:REGRET:WAITING', {})
-  //   }
-  //   else {
-  //     // 本地模式：直接执行悔棋
-  //     this.regretMove()
-  //   }
-  // }
-
-  // 判断是否需要悔两步
-  // private shouldRegretTwoSteps(): boolean {
-  //   // 自己走子后对方也走了，需要悔两步
-  //   // 思路：检查历史记录的长度和当前角色
-  //   // 如果历史记录是偶数，说明双方各走了相同步数
-  //   return this.moveHistory.length % 2 === 0 && this.moveHistory.length > 0 && this.isNetPlay
-  // }
-
   // 实际执行悔棋的方法
   public regretMove(): boolean {
-    if (this.moveCount === 0) {
+    if (this.moveHistory.length === 0) {
       showMsg('没有可悔的棋步')
       return false
     }
-
     const lastMove = this.moveHistory.pop()
     if (!lastMove)
       return false
-
-    // 恢复棋子位置
-    lastMove.capturedPiece.move(lastMove.from)
-
+    const { from, to, capturedPiece } = lastMove
+    const piece = this.board[to.x][to.y]
+    // 将棋子移回原来的位置
+    piece.move(from)
+    this.board[from.x][from.y] = piece
+    delete this.board[to.x][to.y]
     // 恢复被吃掉的棋子
-    if (lastMove.capturedPiece) {
-      const { x, y } = lastMove.to
-      this.board[x][y] = lastMove.capturedPiece
-      lastMove.capturedPiece.draw()
+    if (capturedPiece) {
+      this.board[to.x][to.y] = capturedPiece
+      capturedPiece.move(to)
     }
-    else {
-      // 清除目标位置
-      const { x, y } = lastMove.to
-      delete this.board[x][y]
-    }
+    this.drawChesses()
+    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
 
-    this.moveCount--
     return true
   }
 
@@ -192,7 +163,7 @@ class ChessBoard {
 
   // 记录对方走棋完成
   public opponentMoveCompleted() {
-    this.lastResponseMoveCount = this.moveCount
+    this.lastResponseMoveCount = this.moveHistory.length
   }
 
   // 判断是否是自己的回合
