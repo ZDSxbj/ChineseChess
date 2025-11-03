@@ -26,6 +26,7 @@ interface WebSocketMessage {
   timestamp?: number
   winner?: 0 | 1 | 2
   roomId?: number
+  accepted?: boolean // 新增：用于悔棋响应的布尔值字段
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -113,7 +114,7 @@ export function useWebSocket(): WebSocketService {
         break
       case MessageType.RegretResponse: {
         // 处理悔棋响应
-        const accepted = data.message === 'accept'
+        const accepted = data.accepted
         channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted })
         break
       }
@@ -225,7 +226,7 @@ export function useWebSocket(): WebSocketService {
   const sendRegretResponse = (accepted: boolean) => {
     sendMessage({
       type: MessageType.RegretResponse,
-      message: accepted ? 'accept' : 'reject',
+      accepted,
     })
   }
 
