@@ -28,12 +28,14 @@ function handleRegretAccept() {
   const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
   for (let i = 0; i < steps; i++) {
     chessBoard?.regretMove()
+    regretModalVisible.value = false // 发送响应后销毁提示框
   }
 }
 
 function handleRegretReject() {
   // 拒绝悔棋，通知对方
   ws.sendRegretResponse(false)
+  regretModalVisible.value = false // 发送响应后销毁提示框
 }
 
 function decideSize(isPCBool: boolean) {
@@ -56,7 +58,10 @@ function quit() {
 // 新增悔棋函数
 function regret() {
   if (chessBoard) {
-    if (chessBoard.isNetworkPlay()) {
+    if (!chessBoard.stepsNum) {
+      showMsg('没有可悔棋的步数')
+    }
+    else if (chessBoard.isNetworkPlay()) {
       // 联网模式：发送悔棋请求给对手
       ws.sendRegretRequest()
       // 显示等待提示
@@ -92,6 +97,7 @@ onMounted(() => {
   channel.on('NET:CHESS:REGRET:REQUEST', () => {
     regretModalType.value = 'responding'
     regretModalVisible.value = true
+    showMsg('对方请求悔棋')
   })
   // 监听悔棋响应
   channel.on('NET:CHESS:REGRET:RESPONSE', (data) => {

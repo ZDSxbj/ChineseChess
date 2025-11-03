@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps<{
   visible: boolean
@@ -18,55 +18,70 @@ const showButtons = ref(false)
 const autoAction = ref('')
 let countdownTimer: NodeJS.Timeout | null = null
 
+// 清除定时器（通用方法）
+function clearTimer() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+}
+
+// 开始倒计时（仅响应方需要）
 function startCountdown() {
+  clearTimer() // 先清除可能存在的定时器
   countdown.value = 10
   countdownTimer = setInterval(() => {
     countdown.value--
     if (countdown.value <= 0) {
-      clearInterval(countdownTimer as NodeJS.Timeout)
-      props.onReject?.()
+      clearTimer()
+      props.onReject?.() // 超时自动拒绝
       emit('close')
     }
   }, 1000)
 }
 
-onMounted(() => {
-  if (props.type === 'requesting') {
-    title.value = '等待回应'
-    message.value = '对方正在考虑是否同意悔棋'
-    showCountdown.value = false
-    showButtons.value = false
-  }
-  else {
-    title.value = '悔棋请求'
-    message.value = '对方请求悔棋，是否同意？'
-    showCountdown.value = true
-    showButtons.value = true
-    autoAction.value = '拒绝'
-    startCountdown()
-  }
-})
+// 监听 visible 和 type 变化，动态初始化状态
+watch(
+  () => [props.visible, props.type],
+  ([newVisible, newType]) => {
+    if (newVisible) {
+      // 显示时根据 type 初始化
+      if (newType === 'requesting') {
+        title.value = '等待回应'
+        message.value = '对方正在考虑是否同意悔棋'
+        showCountdown.value = false
+        showButtons.value = false
+        clearTimer() // 请求方不需要倒计时
+      }
+      else {
+        title.value = '悔棋请求'
+        message.value = '对方请求悔棋，是否同意？'
+        showCountdown.value = true
+        showButtons.value = true
+        autoAction.value = '拒绝'
+        startCountdown() // 响应方启动倒计时
+      }
+    }
+    else {
+      // 隐藏时清除所有状态
+      clearTimer()
+    }
+  },
+  { immediate: true }, // 初始化时立即执行
+)
 
-onUnmounted(() => {
-  if (countdownTimer) {
-    clearInterval(countdownTimer)
-  }
-})
-
+// 同意悔棋
 function handleAccept() {
-  if (countdownTimer) {
-    clearInterval(countdownTimer) // 清除倒计时定时器，避免自动拒绝
-  }
-  props.onAccept?.() // 调用父组件传递的“同意”回调
-  emit('close') // 通知父组件关闭弹窗
+  clearTimer()
+  props.onAccept?.()
+  emit('close')
 }
 
+// 拒绝悔棋
 function handleReject() {
-  if (countdownTimer) {
-    clearInterval(countdownTimer) // 清除倒计时定时器
-  }
-  props.onReject?.() // 调用父组件传递的“拒绝”回调
-  emit('close') // 通知父组件关闭弹窗
+  clearTimer()
+  props.onReject?.()
+  emit('close')
 }
 </script>
 

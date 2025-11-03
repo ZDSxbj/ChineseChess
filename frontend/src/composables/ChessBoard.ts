@@ -48,6 +48,10 @@ class ChessBoard {
     return this.isNetPlay
   }
 
+  get stepsNum(): number {
+    return this.moveHistory.length
+  }
+
   get width(): number {
     return this.gridSize * 9
   }
@@ -130,10 +134,6 @@ class ChessBoard {
 
   // 实际执行悔棋的方法
   public regretMove(): boolean {
-    if (this.moveHistory.length === 0) {
-      showMsg('没有可悔的棋步')
-      return false
-    }
     const lastMove = this.moveHistory.pop()
     if (!lastMove)
       return false

@@ -13,6 +13,8 @@ const (
 	commandJoin                               // 加入房间
 	commandCreate                             // 创建房间
 	commandHeartbeat                          // 心跳
+	commandRegretRequest  CommendType = 13 // 悔棋请求命令
+    commandRegretResponse CommendType = 14 // 悔棋响应命令
 )
 
 type moveRequest struct {
@@ -29,4 +31,15 @@ type hubCommand struct {
 	commandType CommendType
 	client      *Client
 	payload     any
+}
+
+// 新增：悔棋请求 payload 结构（用于在命令中传递数据）
+type regretRequestPayload struct {
+	from *Client // 发起悔棋的客户端
+}
+
+// 新增：悔棋响应 payload 结构
+type regretResponsePayload struct {
+	from     *Client // 响应悔棋的客户端
+	accepted bool    // 是否同意悔棋
 }
