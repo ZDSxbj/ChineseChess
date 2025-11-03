@@ -26,6 +26,8 @@ class ChessBoard {
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
   }> = []
 
+  private moveCount: number = 0 // 记录总走棋数
+  private lastResponseMoveCount: number = 0 // 上次对方走棋后的步数
   constructor(
     boardElement: HTMLCanvasElement,
     chessesElement: HTMLCanvasElement,
@@ -110,6 +112,7 @@ class ChessBoard {
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
     })
     piece.move(to)
+    this.moveCount++
 
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
@@ -128,72 +131,73 @@ class ChessBoard {
   }
 
   // 悔棋方法
-  public regret() {
-    if (this.isNetPlay) {
-      // 联网模式：发送悔棋请求给对手
-      channel.emit('NET:CHESS:REGRET:REQUEST', {})
-      // 显示等待提示框
-      // 这里需要通过事件通知Vue组件显示提示框
-      channel.emit('LOCAL:CHESS:REGRET:WAITING', {})
-    }
-    else {
-      // 本地模式：直接执行悔棋
-      this.regretMove()
-    }
-  }
+  // public regret() {
+  //   if (this.isNetPlay) {
+  //     // 联网模式：发送悔棋请求给对手
+  //     channel.emit('NET:CHESS:REGRET:REQUEST', {})
+  //     // 显示等待提示框
+  //     // 这里需要通过事件通知Vue组件显示提示框
+  //     channel.emit('LOCAL:CHESS:REGRET:WAITING', {})
+  //   }
+  //   else {
+  //     // 本地模式：直接执行悔棋
+  //     this.regretMove()
+  //   }
+  // }
 
   // 判断是否需要悔两步
-  private shouldRegretTwoSteps(): boolean {
-    // 自己走子后对方也走了，需要悔两步
-    // 思路：检查历史记录的长度和当前角色
-    // 如果历史记录是偶数，说明双方各走了相同步数
-    return this.moveHistory.length % 2 === 0 && this.moveHistory.length > 0 && this.isNetPlay
-  }
+  // private shouldRegretTwoSteps(): boolean {
+  //   // 自己走子后对方也走了，需要悔两步
+  //   // 思路：检查历史记录的长度和当前角色
+  //   // 如果历史记录是偶数，说明双方各走了相同步数
+  //   return this.moveHistory.length % 2 === 0 && this.moveHistory.length > 0 && this.isNetPlay
+  // }
 
   // 实际执行悔棋的方法
   public regretMove(): boolean {
-    if (this.moveHistory.length === 0) {
+    if (this.moveCount === 0) {
       showMsg('没有可悔的棋步')
       return false
     }
-    // 判断需要悔棋的步数
-    const stepsToRegret = this.shouldRegretTwoSteps() ? 2 : 1
 
-    for (let i = 0; i < stepsToRegret; i++) {
-      if (this.moveHistory.length === 0)
-        break
+    const lastMove = this.moveHistory.pop()
+    if (!lastMove)
+      return false
 
-      const lastMove = this.moveHistory.pop()
-      if (!lastMove)
-        break
+    // 恢复棋子位置
+    lastMove.capturedPiece.move(lastMove.from)
 
-      const { from, to, capturedPiece } = lastMove
-      const piece = this.board[to.x][to.y]
-
-      if (piece) {
-        // 将棋子移回原来的位置
-        piece.move(from)
-        this.board[from.x][from.y] = piece
-        delete this.board[to.x][to.y]
-
-        // 恢复被吃掉的棋子
-        if (capturedPiece) {
-          this.board[to.x][to.y] = capturedPiece
-          capturedPiece.move(to)
-        }
-      }
+    // 恢复被吃掉的棋子
+    if (lastMove.capturedPiece) {
+      const { x, y } = lastMove.to
+      this.board[x][y] = lastMove.capturedPiece
+      lastMove.capturedPiece.draw()
+    }
+    else {
+      // 清除目标位置
+      const { x, y } = lastMove.to
+      delete this.board[x][y]
     }
 
-    // 重新绘制棋盘
-    this.drawChesses()
-    // 交换角色
-    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
-
-    // 如果是联网模式且是同意对方的悔棋请求，需要通知对方
-    if (this.isNetPlay && stepsToRegret > 0) {
-      channel.emit('NET:CHESS:REGRET:SUCCESS', {})
-    }
+    this.moveCount--
     return true
+  }
+
+  // 获取自对方上次走棋后的步数
+  public getMoveCountSinceLastResponse(): number {
+    // 如果是自己回合，说明对方还走过了，回退2步
+    // 如果是对方回合，说明对方还没走过，回退1步
+    return this.isMyTurn() ? 2 : 1
+  }
+
+  // 记录对方走棋完成
+  public opponentMoveCompleted() {
+    this.lastResponseMoveCount = this.moveCount
+  }
+
+  // 判断是否是自己的回合
+  public isMyTurn(): boolean {
+    return this.currentRole === 'self'
   }
 
   private listenClick() {

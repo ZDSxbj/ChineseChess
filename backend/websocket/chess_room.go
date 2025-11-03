@@ -3,6 +3,7 @@ package websocket
 import (
 	"fmt"
 	"sync"
+	"encoding/json"  // 新增这一行，导入JSON处理包
 )
 
 var (
@@ -92,3 +93,38 @@ func (cr *ChessRoom) join(c *Client) error {
 // 	}
 // 	return fmt.Errorf("不在该房间")
 // }
+
+// 在chess_room.go中添加
+func (cr *ChessRoom) handleRegretRequest(client *Client) error {
+    // // 判断是否是当前玩家的回合
+    // if cr.Current != client {
+    //     return fmt.Errorf("不是你的回合，无法请求悔棋")
+    // }
+    
+    // 向前手玩家发送悔棋请求
+    if cr.Next != nil {
+        msg := BaseMessage{Type: messageRegretRequest}
+        data, _ := json.Marshal(msg)
+        cr.Next.sendMessage(data)
+    }
+    return nil
+}
+
+func (cr *ChessRoom) handleRegretResponse(client *Client, accepted bool) error {
+    // 判断是否是后手玩家的响应
+    // if cr.Next != client {
+    //     return fmt.Errorf("无权响应悔棋请求")
+    // }
+    
+    // 向请求方发送响应
+    if cr.Current != nil {
+        msg := RegretResponseMessage{
+            BaseMessage: BaseMessage{Type: messageRegretResponse},
+            Accepted: accepted,
+        }
+        data, _ := json.Marshal(msg)
+        cr.Current.sendMessage(data)
+    }
+    
+    return nil
+}

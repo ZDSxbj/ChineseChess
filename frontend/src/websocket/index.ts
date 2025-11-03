@@ -13,6 +13,8 @@ const MessageType = {
   Create: 7,
   GiveUp: 8,
   Error: 10,
+  RegretRequest: 11, // 悔棋请求
+  RegretResponse: 12, // 悔棋响应
 } as const
 
 interface WebSocketMessage {
@@ -46,6 +48,8 @@ export interface WebSocketService {
   join: (id: number) => void
   create: () => Promise<unknown>
   giveUp: () => void
+  sendRegretRequest: () => void
+  sendRegretResponse: (accepted: boolean) => void
 }
 
 export function useWebSocket(): WebSocketService {
@@ -103,6 +107,16 @@ export function useWebSocket(): WebSocketService {
       case MessageType.Create:
         resolve?.()
         break
+      case MessageType.RegretRequest:
+        // 收到悔悔棋请求给UI
+        channel.emit('NET:CHESS:REGRET:REQUEST', {})
+        break
+      case MessageType.RegretResponse: {
+        // 处理悔棋响应
+        const accepted = data.message === 'accept'
+        channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted })
+        break
+      }
       default:
         break
     }
@@ -193,5 +207,20 @@ export function useWebSocket(): WebSocketService {
     }
   }
 
-  return { connect, close, end, match, move, join, create, giveUp }
+  // 发送悔棋请求
+  const sendRegretRequest = () => {
+    sendMessage({
+      type: MessageType.RegretRequest,
+    })
+  }
+
+  // 发送悔棋响应
+  const sendRegretResponse = (accepted: boolean) => {
+    sendMessage({
+      type: MessageType.RegretResponse,
+      message: accepted ? 'accept' : 'reject',
+    })
+  }
+
+  return { connect, close, end, match, move, join, create, giveUp, sendRegretRequest, sendRegretResponse }
 }

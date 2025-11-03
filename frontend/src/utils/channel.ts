@@ -27,7 +27,6 @@ interface GameEvents {
     accepted: boolean
   }
   'NET:CHESS:REGRET:SUCCESS': Record<string, never>
-  'LOCAL:CHESS:REGRET:WAITING': Record<string, never> // 等待对方悔棋响应
 }
 
 type Listener<T> = (req: T) => void

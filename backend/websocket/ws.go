@@ -497,7 +497,107 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				payload:     client.Role,
 			}
 		}
+    // 新增：处理悔棋请求
+    case messageRegretRequest:
+        if client.RoomId == -1 {
+            return client.sendMessage(NormalMessage{
+                BaseMessage: BaseMessage{Type: messageError},
+                Message:     "不在房间内，无法请求悔棋",
+            })
+        }
+        ch.mu.Lock()
+        room, ok := ch.Rooms[client.RoomId]
+        ch.mu.Unlock()
+        if !ok {
+            return client.sendMessage(NormalMessage{
+                BaseMessage: BaseMessage{Type: messageError},
+                Message:     "房间不存在",
+            })
+        }
+        // 确定对手（当前客户端是Current，则对手是Next，反之亦然）
+        var opponent *Client
+        if room.Current == client {
+            opponent = room.Next
+        } else {
+            opponent = room.Current
+        }
+        if opponent == nil {
+            return client.sendMessage(NormalMessage{
+                BaseMessage: BaseMessage{Type: messageError},
+                Message:     "对手不存在",
+            })
+        }
+        // 向对手发送悔棋请求
+        return opponent.sendMessage(NormalMessage{
+            BaseMessage: BaseMessage{Type: messageRegretRequest},
+            Message:     "对方请求悔棋",
+        })
+
+    // 新增：处理悔棋响应
+    case messageRegretResponse:
+        if client.RoomId == -1 {
+            return client.sendMessage(NormalMessage{
+                BaseMessage: BaseMessage{Type: messageError},
+                Message:     "不在房间内，无法响应悔棋",
+            })
+        }
+        // 解析响应内容（是否同意悔棋）
+        var resp RegretResponseMessage
+        if err := json.Unmarshal(rawMessage, &resp); err != nil {
+            return fmt.Errorf("解析悔棋响应失败: %v", err)
+        }
+        ch.mu.Lock()
+        room, ok := ch.Rooms[client.RoomId]
+        ch.mu.Unlock()
+        if !ok {
+            return client.sendMessage(NormalMessage{
+                BaseMessage: BaseMessage{Type: messageError},
+                Message:     "房间不存在",
+            })
+        }
+        // 确定请求悔棋的发起方（当前客户端是响应方，对手是发起方）
+        var requester *Client
+        if room.Current == client {
+            requester = room.Next
+        } else {
+            requester = room.Current
+        }
+        if requester == nil {
+            return client.sendMessage(NormalMessage{
+                BaseMessage: BaseMessage{Type: messageError},
+                Message:     "请求方不存在",
+            })
+        }
+        // 向发起方发送响应结果
+        if resp.Accepted {
+            // 如果同意悔棋，同步通知双方执行悔棋操作
+            // 1. 通知发起方
+            if err := requester.sendMessage(RegretResponseMessage{
+                BaseMessage: BaseMessage{Type: messageRegretResponse},
+                Accepted:    true,
+            }); err != nil {
+                return err
+            }
+            // 2. 通知响应方（当前客户端）
+            if err := client.sendMessage(RegretResponseMessage{
+                BaseMessage: BaseMessage{Type: messageRegretResponse},
+                Accepted:    true,
+            }); err != nil {
+                return err
+            }
+            // 3. 记录悔棋（利用房间的History字段）
+            if len(room.History) >= 1 {
+                room.History = room.History[:len(room.History)-1] // 移除最后一步
+            }
+        } else {
+            // 拒绝悔棋，仅通知发起方
+            return requester.sendMessage(RegretResponseMessage{
+                BaseMessage: BaseMessage{Type: messageRegretResponse},
+                Accepted:    false,
+            })
+        }
 	}
+	
 	return nil
 }
 

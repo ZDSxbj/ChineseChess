@@ -32,7 +32,10 @@ channel.on('NET:CHESS:REGRET:RESPONSE', (data) => {
   regretModalVisible.value = false
   if (data.accepted) {
     // 对方同意悔棋，执行悔棋操作
-    chessBoard?.regretMove()
+    const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
+    for (let i = 0; i < steps; i++) {
+      chessBoard?.regretMove()
+    }
     showMsg('对方同意悔棋')
   }
   else {
@@ -49,14 +52,17 @@ channel.on('NET:CHESS:REGRET:SUCCESS', () => {
 
 function handleRegretAccept() {
   // 同意悔棋，通知对方
-  channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted: true })
+  ws.sendRegretResponse(true)
   // 自己也执行悔棋
-  chessBoard?.regretMove()
+  const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
+  for (let i = 0; i < steps; i++) {
+    chessBoard?.regretMove()
+  }
 }
 
 function handleRegretReject() {
   // 拒绝悔棋，通知对方
-  channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted: false })
+  ws.sendRegretResponse(false)
 }
 
 function decideSize(isPCBool: boolean) {
@@ -81,7 +87,10 @@ function regret() {
   if (chessBoard) {
     if (chessBoard.isNetworkPlay()) {
       // 联网模式：发送悔棋请求给对手
-      channel.emit('NET:CHESS:REGRET:REQUEST', {})
+      ws.sendRegretRequest()
+      // 显示等待提示
+      regretModalType.value = 'requesting'
+      regretModalVisible.value = true
     }
     else {
       // 本地模式：直接执行悔棋
