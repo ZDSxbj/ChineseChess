@@ -632,13 +632,16 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 		}
 		room.mu.Unlock()
 
-		// 通知双方执行悔棋
+		// 通知请求方执行悔棋
 		respMsg := RegretResponseMessage{
 			BaseMessage: BaseMessage{Type: messageRegretResponse},
 			Accepted:    true,
 		}
 		requester.sendMessage(respMsg)
-		responder.sendMessage(respMsg)
+		if(room.Current == responder) {
+			room.Current = requester
+			room.Next = responder
+		}
 	} else {
 		// 拒绝悔棋：仅通知请求方
 		requester.sendMessage(RegretResponseMessage{

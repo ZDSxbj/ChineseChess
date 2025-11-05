@@ -25,11 +25,14 @@ function handleRegretAccept() {
   // 同意悔棋，通知对方
   ws.sendRegretResponse(true)
   // 自己也执行悔棋
-  const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
+  const steps = chessBoard.isMyTurn() ? 1 : 2
   for (let i = 0; i < steps; i++) {
     chessBoard?.regretMove()
-    regretModalVisible.value = false // 发送响应后销毁提示框
   }
+  showMsg(`悔了${steps}步棋`)
+  // 悔棋后固定为对方的回合
+  chessBoard?.setCurrentRole('enemy')
+  regretModalVisible.value = false // 发送响应后销毁提示框
 }
 
 function handleRegretReject() {
@@ -62,6 +65,11 @@ function regret() {
       showMsg('没有可悔棋的步数')
     }
     else if (chessBoard.isNetworkPlay()) {
+      // 新增判断：联网状态下，自身是黑子且历史步数为1时不能悔棋
+      if (chessBoard.Color === 'black' && chessBoard.stepsNum === 1) {
+        showMsg('没有可悔棋的步数')
+        return
+      }
       // 联网模式：发送悔棋请求给对手
       ws.sendRegretRequest()
       // 显示等待提示
@@ -104,11 +112,13 @@ onMounted(() => {
     regretModalVisible.value = false
     if (data.accepted) {
       // 对方同意悔棋，执行悔棋操作
-      const steps = chessBoard?.getMoveCountSinceLastResponse() || 1
+      const steps = chessBoard.isMyTurn() ? 2 : 1
       for (let i = 0; i < steps; i++) {
         chessBoard?.regretMove()
       }
-      showMsg('对方同意悔棋')
+      showMsg(`悔了${steps}步棋`)
+      chessBoard?.setCurrentRole('self')
+      // showMsg(`对方同意悔棋${chessBoard.currentRole}`)
     }
     else {
       showMsg('对方拒绝悔棋')
@@ -166,8 +176,8 @@ onUnmounted(() => {
   <RegretModal
     :visible="regretModalVisible"
     :type="regretModalType"
-    :onAccept="handleRegretAccept"
-    :onReject="handleRegretReject"
+    :on-accept="handleRegretAccept"
+    :on-reject="handleRegretReject"
     @close="regretModalVisible = false"
   />
 </template>

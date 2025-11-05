@@ -15,7 +15,7 @@ class ChessBoard {
   private chesses: CanvasRenderingContext2D
   private selectedPiece: ChessPiece | null = null
   private selfColor: ChessColor = 'red'
-  private currentRole: ChessRole = 'self'
+  public currentRole: ChessRole = 'self'
   private isNetPlay: boolean = false
   private clickCallback: (event: MouseEvent) => void = () => {}
   // 新增：存储走棋历史（记录移动前的状态）
@@ -26,7 +26,6 @@ class ChessBoard {
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
   }> = []
 
-  private lastResponseMoveCount: number = 0 // 上次对方走棋后的步数
   constructor(
     boardElement: HTMLCanvasElement,
     chessesElement: HTMLCanvasElement,
@@ -58,6 +57,10 @@ class ChessBoard {
 
   get height(): number {
     return this.gridSize * 10
+  }
+
+  get Color(): ChessColor {
+    return this.selfColor
   }
 
   private clickHandler(event: MouseEvent) {
@@ -130,6 +133,7 @@ class ChessBoard {
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
+    // showMsg(`现在是${this.currentRole}的回合`)
   }
 
   // 实际执行悔棋的方法
@@ -150,25 +154,17 @@ class ChessBoard {
     }
     this.drawChesses()
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
-
     return true
-  }
-
-  // 获取自对方上次走棋后的步数
-  public getMoveCountSinceLastResponse(): number {
-    // 如果是自己回合，说明对方还走过了，回退2步
-    // 如果是对方回合，说明对方还没走过，回退1步
-    return this.isMyTurn() ? 2 : 1
-  }
-
-  // 记录对方走棋完成
-  public opponentMoveCompleted() {
-    this.lastResponseMoveCount = this.moveHistory.length
   }
 
   // 判断是否是自己的回合
   public isMyTurn(): boolean {
     return this.currentRole === 'self'
+  }
+
+  // 新增：手动设置当前执行方（用于悔棋后切换）
+  public setCurrentRole(role: ChessRole) {
+    this.currentRole = role
   }
 
   private listenClick() {
