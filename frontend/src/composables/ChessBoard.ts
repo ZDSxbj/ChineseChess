@@ -15,9 +15,16 @@ class ChessBoard {
   private chesses: CanvasRenderingContext2D
   private selectedPiece: ChessPiece | null = null
   private selfColor: ChessColor = 'red'
-  private currentRole: ChessRole = 'self'
+  public currentRole: ChessRole = 'self'
   private isNetPlay: boolean = false
   private clickCallback: (event: MouseEvent) => void = () => {}
+  // 新增：存储走棋历史（记录移动前的状态）
+  private moveHistory: Array<{
+    from: ChessPosition
+    to: ChessPosition
+    capturedPiece: ChessPiece | null// 被吃掉的棋子（如果有）
+    currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
+  }> = []
 
   constructor(
     boardElement: HTMLCanvasElement,
@@ -33,6 +40,15 @@ class ChessBoard {
     this.initCanvasElement()
     this.background = this.boardElement.getContext('2d') as CanvasRenderingContext2D
     this.chesses = this.chessesElement.getContext('2d') as CanvasRenderingContext2D
+    this.listenEvent()
+  }
+
+  public isNetworkPlay(): boolean {
+    return this.isNetPlay
+  }
+
+  get stepsNum(): number {
+    return this.moveHistory.length
   }
 
   get width(): number {
@@ -41,6 +57,10 @@ class ChessBoard {
 
   get height(): number {
     return this.gridSize * 10
+  }
+
+  get Color(): ChessColor {
+    return this.selfColor
   }
 
   private clickHandler(event: MouseEvent) {
@@ -90,7 +110,13 @@ class ChessBoard {
     if (!piece.isMoveValid(to, this.board)) {
       return
     }
-
+    // 记录历史
+    this.moveHistory.push({
+      from: { ...from },
+      to: { ...to },
+      capturedPiece: targetPiece || null,
+      currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
+    })
     piece.move(to)
 
     // 只有自己走才发送走子事件
@@ -107,6 +133,38 @@ class ChessBoard {
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
+    // showMsg(`现在是${this.currentRole}的回合`)
+  }
+
+  // 实际执行悔棋的方法
+  public regretMove(): boolean {
+    const lastMove = this.moveHistory.pop()
+    if (!lastMove)
+      return false
+    const { from, to, capturedPiece } = lastMove
+    const piece = this.board[to.x][to.y]
+    // 将棋子移回原来的位置
+    piece.move(from)
+    this.board[from.x][from.y] = piece
+    delete this.board[to.x][to.y]
+    // 恢复被吃掉的棋子
+    if (capturedPiece) {
+      this.board[to.x][to.y] = capturedPiece
+      capturedPiece.move(to)
+    }
+    this.drawChesses()
+    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    return true
+  }
+
+  // 判断是否是自己的回合
+  public isMyTurn(): boolean {
+    return this.currentRole === 'self'
+  }
+
+  // 新增：手动设置当前执行方（用于悔棋后切换）
+  public setCurrentRole(role: ChessRole) {
+    this.currentRole = role
   }
 
   private listenClick() {

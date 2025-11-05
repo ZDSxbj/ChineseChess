@@ -13,6 +13,8 @@ const MessageType = {
   Create: 7,
   GiveUp: 8,
   Error: 10,
+  RegretRequest: 11, // 悔棋请求
+  RegretResponse: 12, // 悔棋响应
 } as const
 
 interface WebSocketMessage {
@@ -24,6 +26,7 @@ interface WebSocketMessage {
   timestamp?: number
   winner?: 0 | 1 | 2
   roomId?: number
+  accepted?: boolean // 新增：用于悔棋响应的布尔值字段
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -46,6 +49,8 @@ export interface WebSocketService {
   join: (id: number) => void
   create: () => Promise<unknown>
   giveUp: () => void
+  sendRegretRequest: () => void
+  sendRegretResponse: (accepted: boolean) => void
 }
 
 export function useWebSocket(): WebSocketService {
@@ -103,6 +108,16 @@ export function useWebSocket(): WebSocketService {
       case MessageType.Create:
         resolve?.()
         break
+      case MessageType.RegretRequest:
+        // 收到悔悔棋请求给UI
+        channel.emit('NET:CHESS:REGRET:REQUEST', {})
+        break
+      case MessageType.RegretResponse: {
+        // 处理悔棋响应
+        const accepted = data.accepted
+        channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted })
+        break
+      }
       default:
         break
     }
@@ -110,6 +125,8 @@ export function useWebSocket(): WebSocketService {
 
   const sendMessage = (message: WebSocketMessage) => {
     if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+      // 打印发送的消息
+      console.log('[WebSocket 发送]', message)
       socket.value.send(JSON.stringify(message))
     }
     else {
@@ -174,6 +191,11 @@ export function useWebSocket(): WebSocketService {
     }
 
     socket.value.onmessage = (event) => {
+      // 打印原始JSON字符串
+      console.log('[WebSocket 接收] 原始消息:', event.data)
+      // 解析后的数据
+      const data = JSON.parse(event.data)
+      console.log('[WebSocket 接收] 解析后消息:', data)
       eventHandler(JSON.parse(event.data))
     }
 
@@ -193,5 +215,20 @@ export function useWebSocket(): WebSocketService {
     }
   }
 
-  return { connect, close, end, match, move, join, create, giveUp }
+  // 发送悔棋请求
+  const sendRegretRequest = () => {
+    sendMessage({
+      type: MessageType.RegretRequest,
+    })
+  }
+
+  // 发送悔棋响应
+  const sendRegretResponse = (accepted: boolean) => {
+    sendMessage({
+      type: MessageType.RegretResponse,
+      accepted,
+    })
+  }
+
+  return { connect, close, end, match, move, join, create, giveUp, sendRegretRequest, sendRegretResponse }
 }

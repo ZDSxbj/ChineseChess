@@ -83,7 +83,7 @@ class ChessPiece {
     ctx.fillText(this.name, x, y)
   }
 
-  private clearFromCanvas() {
+  public clearFromCanvas() {
     const ctx = this.ctx
     const x = this.position.x * this.gridSize + this.gridSize / 2
     const y = this.position.y * this.gridSize + this.gridSize / 2
