@@ -4,18 +4,18 @@ type MessageType int
 
 // 信息类型
 const (
-	messageNormal MessageType = iota + 1 // 普通消息
-	messageMatch                         // 匹配消息
-	messageMove                          // 移动消息
-	messageStart                         // 开始消息
-	messageEnd                           // 结束消息
-	messageJoin                          // 加入消息
-	messageCreate                        // 创建房间消息
-	messageGiveUp                        // 放弃消息
-	messageError  = 10
-    // ... 原有类型
-    messageRegretRequest MessageType = 11  // 悔棋请求
-    messageRegretResponse MessageType = 12 // 悔棋响应
+	messageNormal         MessageType = iota + 1 // 普通消息
+	messageMatch                                 // 匹配消息
+	messageMove                                  // 移动消息
+	messageStart                                 // 开始消息
+	messageEnd                                   // 结束消息
+	messageJoin                                  // 加入消息
+	messageCreate                                // 创建房间消息
+	messageGiveUp                                // 放弃消息
+	messageError                      = 10
+	messageRegretRequest  MessageType = 11 // 悔棋请求
+	messageRegretResponse MessageType = 12 // 悔棋响应
+	messageChatMessage    MessageType = 15 // 聊天消息 (与前端保持一致)
 )
 
 type BaseMessage struct {
@@ -54,6 +54,12 @@ type endMessage struct {
 }
 
 type RegretResponseMessage struct {
-    BaseMessage
-    Accepted bool `json:"accepted"`
+	BaseMessage
+	Accepted bool `json:"accepted"`
+}
+
+type ChatMessage struct {
+	BaseMessage
+	Content string `json:"content"`
+	Sender  string `json:"sender"`
 }

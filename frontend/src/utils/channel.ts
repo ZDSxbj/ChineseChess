@@ -27,6 +27,10 @@ interface GameEvents {
     accepted: boolean
   }
   'NET:CHESS:REGRET:SUCCESS': Record<string, never>
+  'NET:CHAT:MESSAGE': {
+    sender: string
+    content: string
+  }
 }
 
 type Listener<T> = (req: T) => void
