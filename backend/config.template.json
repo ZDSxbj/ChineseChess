@@ -1,8 +1,0 @@
-{
-    "smtp": {
-        "host":"xxx",
-        "port": "xxx",
-        "username":"xxx",
-        "password":"xxx"
-    }
-}

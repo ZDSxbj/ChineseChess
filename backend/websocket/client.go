@@ -20,7 +20,7 @@ type clientRole int
 const (
 	// 0表示没有角色，1表示红方，2表示黑方
 	roleNone clientRole = iota
-	roleRed 
+	roleRed
 	roleBlack
 )
 
@@ -30,10 +30,12 @@ type Client struct {
 	Status   clientStatus
 	RoomId   int
 	Role     clientRole // 角色
-	LastPong time.Time // 上次收到PONG的时间
+	LastPong time.Time  // 上次收到PONG的时间
+	Username string     // 用户名
+	Send     chan any   // 发送消息的通道
 }
 
-func NewClient(conn *websocket.Conn, id int) *Client {
+func NewClient(conn *websocket.Conn, id int, username string) *Client {
 	return &Client{
 		Conn:     conn,
 		Id:       id,
@@ -41,6 +43,8 @@ func NewClient(conn *websocket.Conn, id int) *Client {
 		RoomId:   -1,
 		Role:     roleNone,
 		LastPong: time.Now(),
+		Username: username,
+		Send:     make(chan any, 256),
 	}
 }
 

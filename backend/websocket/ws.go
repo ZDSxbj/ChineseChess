@@ -17,7 +17,8 @@ import (
 	"chinese-chess-backend/database"
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/room"
-	"chinese-chess-backend/dto/user"
+	dtouser "chinese-chess-backend/dto/user"
+	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/utils"
 	"slices"
 )
@@ -289,7 +290,7 @@ func (ch *ChessHub) Run() {
 				ch.Rooms[r.Id] = r
 				roomInfo := room.RoomInfo{
 					Id: client.RoomId,
-					Current: user.UserInfo{
+					Current: dtouser.UserInfo{
 						ID: uint(client.Id),
 					},
 				}
@@ -306,12 +307,31 @@ func (ch *ChessHub) Run() {
 				payload := cmd.payload.(regretRequestPayload)
 				client := payload.from
 				ch.handleRegretRequest(client)
-		
+
 			// 新增：处理悔棋响应命令
 			case commandRegretResponse:
 				payload := cmd.payload.(regretResponsePayload)
 				client := payload.from
 				ch.handleRegretResponse(client, payload.accepted)
+			case commandChatMessage:
+				client := cmd.client
+				chatMsg := cmd.payload.(*ChatMessage)
+				room := ch.Rooms[client.RoomId]
+				if room == nil {
+					client.sendMessage(NormalMessage{
+						BaseMessage: BaseMessage{Type: messageError},
+						Message:     "房间不存在",
+					})
+					return nil
+				}
+				// 获取对手
+				target := room.Next
+				if client == room.Next {
+					target = room.Current
+				}
+				if target != nil {
+					target.sendMessage(chatMsg)
+				}
 			}
 			return nil
 		})
@@ -338,8 +358,15 @@ func (ch *ChessHub) HandleConnection(c *gin.Context) {
 	}
 	defer conn.Close()
 
+	// 从数据库获取用户信息
+	var user modeluser.User
+	if err := database.GetMysqlDb().First(&user, id).Error; err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("获取用户信息失败"))
+		return
+	}
+
 	// 创建一个新的客户端
-	client := NewClient(conn, id)
+	client := NewClient(conn, id, user.Name)
 
 	conn.SetReadLimit(1024 * 1024)
 	conn.SetPongHandler(func(string) error {
@@ -508,8 +535,8 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				payload:     client.Role,
 			}
 		}
-    // 新增：处理悔棋请求
-    case messageRegretRequest:
+	// 新增：处理悔棋请求
+	case messageRegretRequest:
 		if client.Status != userPlaying || client.RoomId == -1 {
 			return client.sendMessage(NormalMessage{
 				BaseMessage: BaseMessage{Type: messageError},
@@ -546,8 +573,28 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				accepted: resp.Accepted,
 			},
 		}
+	case messageChatMessage:
+		if client.Status != userPlaying || client.RoomId == -1 {
+			return client.sendMessage(NormalMessage{
+				BaseMessage: BaseMessage{Type: messageError},
+				Message:     "不在游戏中，无法发送消息",
+			})
+		}
+		var chatMsg ChatMessage
+		if err := json.Unmarshal(rawMessage, &chatMsg); err != nil {
+			return fmt.Errorf("解析聊天消息失败: %v", err)
+		}
+
+		ch.commands <- hubCommand{
+			commandType: commandChatMessage,
+			client:      client,
+			payload: &ChatMessage{
+				BaseMessage: BaseMessage{Type: messageChatMessage},
+				Content:     chatMsg.Content,
+				Sender:      client.Username,
+			},
+		}
 	}
-	
 	return nil
 }
 
@@ -638,7 +685,7 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 			Accepted:    true,
 		}
 		requester.sendMessage(respMsg)
-		if(room.Current == responder) {
+		if room.Current == responder {
 			room.Current = requester
 			room.Next = responder
 		}

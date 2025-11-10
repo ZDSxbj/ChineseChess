@@ -3,18 +3,19 @@ package websocket
 type CommendType int
 
 const (
-	commandRegister    CommendType = iota + 1 // 注册
-	commandUnregister                         // 注销
-	commandMatch                              // 匹配
-	commandMove                               // 移动
-	commandSendMessage                        // 发送消息
-	commandStart                              // 开始游戏
-	commandEnd                                // 结束游戏
-	commandJoin                               // 加入房间
-	commandCreate                             // 创建房间
-	commandHeartbeat                          // 心跳
-	commandRegretRequest  CommendType = 13 // 悔棋请求命令
-    commandRegretResponse CommendType = 14 // 悔棋响应命令
+	commandRegister       CommendType = iota + 1 // 注册
+	commandUnregister                            // 注销
+	commandMatch                                 // 匹配
+	commandMove                                  // 移动
+	commandSendMessage                           // 发送消息
+	commandStart                                 // 开始游戏
+	commandEnd                                   // 结束游戏
+	commandJoin                                  // 加入房间
+	commandCreate                                // 创建房间
+	commandHeartbeat                             // 心跳
+	commandRegretRequest  CommendType = 13       // 悔棋请求命令
+	commandRegretResponse CommendType = 14       // 悔棋响应命令
+	commandChatMessage    CommendType = 15       // 聊天消息命令
 )
 
 type moveRequest struct {

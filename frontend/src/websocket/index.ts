@@ -15,6 +15,7 @@ const MessageType = {
   Error: 10,
   RegretRequest: 11, // 悔棋请求
   RegretResponse: 12, // 悔棋响应
+  ChatMessage: 15, // 聊天消息
 } as const
 
 interface WebSocketMessage {
@@ -26,7 +27,9 @@ interface WebSocketMessage {
   timestamp?: number
   winner?: 0 | 1 | 2
   roomId?: number
-  accepted?: boolean // 新增：用于悔棋响应的布尔值字段
+  accepted?: boolean // 用于悔棋响应的布尔值字段
+  content?: string  // 聊天消息内容
+  sender?: string   // 聊天消息发送者
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -51,6 +54,7 @@ export interface WebSocketService {
   giveUp: () => void
   sendRegretRequest: () => void
   sendRegretResponse: (accepted: boolean) => void
+  sendChatMessage: (content: string) => void // 新增发送聊天消息方法
 }
 
 export function useWebSocket(): WebSocketService {
@@ -116,6 +120,14 @@ export function useWebSocket(): WebSocketService {
         // 处理悔棋响应
         const accepted = data.accepted
         channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted })
+        break
+      }
+      case MessageType.ChatMessage: {
+        // 处理聊天消息
+        const { sender, content } = data
+        if (sender && content) {
+          channel.emit('NET:CHAT:MESSAGE', { sender, content })
+        }
         break
       }
       default:
@@ -230,5 +242,25 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
-  return { connect, close, end, match, move, join, create, giveUp, sendRegretRequest, sendRegretResponse }
+  // 发送聊天消息
+  const sendChatMessage = (content: string) => {
+    sendMessage({
+      type: MessageType.ChatMessage,
+      content,
+    })
+  }
+
+  return { 
+    connect,
+    close,
+    end,
+    match,
+    move,
+    join,
+    create,
+    giveUp,
+    sendRegretRequest,
+    sendRegretResponse,
+    sendChatMessage
+  }
 }

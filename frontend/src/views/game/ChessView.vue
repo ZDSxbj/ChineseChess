@@ -7,8 +7,10 @@ import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
 import channel from '@/utils/channel'
+import ChatPanel from '@/components/ChatPanel.vue'
 
 const router = useRouter()
+const chatPanelRef = ref()
 
 const background = useTemplateRef('background')
 const chesses = useTemplateRef('chesses')
@@ -101,6 +103,11 @@ onMounted(() => {
     chessBoard.stop()
     chessBoard.start(color, true)
   })
+
+  // 监听聊天消息
+  channel.on('NET:CHAT:MESSAGE', ({ sender, content }) => {
+    chatPanelRef.value?.receiveMessage(sender, content)
+  })
   // 监听悔棋请求
   channel.on('NET:CHESS:REGRET:REQUEST', () => {
     regretModalType.value = 'responding'
@@ -143,34 +150,41 @@ onUnmounted(() => {
       />
       <canvas ref="chesses" class="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/4" />
     </div>
-    <div class="sm:h-full sm:w-1/5">
-      <!-- 新增悔棋按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="regret"
-      >
-        悔棋
-      </button>
-      <!-- 原有的认输按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="giveUp"
-      >
-        认输
-      </button>
-      <!-- 原有的退出按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="quit"
-      >
-        退出
-      </button>
+    <div class="sm:h-full sm:w-1/5 flex flex-col">
+      <div class="flex flex-col space-y-4 mb-4">
+        <!-- 新增悔棋按钮 -->
+        <button
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="regret"
+        >
+          悔棋
+        </button>
+        <!-- 原有的认输按钮 -->
+        <button
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="giveUp"
+        >
+          认输
+        </button>
+        <!-- 原有的退出按钮 -->
+        <button
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="quit"
+        >
+          退出
+        </button>
+      </div>
+      
+      <!-- 聊天面板 -->
+      <div class="flex-1">
+        <ChatPanel ref="chatPanelRef" :ws="ws" />
+      </div>
     </div>
   </div>
   <RegretModal
