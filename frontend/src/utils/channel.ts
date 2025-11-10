@@ -31,6 +31,13 @@ interface GameEvents {
     sender: string
     content: string
   }
+
+  // 和棋相关事件
+  'NET:CHESS:DRAW:REQUEST': Record<string, never>
+  'NET:CHESS:DRAW:RESPONSE': {
+    accepted: boolean
+  }
+  'NET:CHESS:DRAW:SUCCESS': Record<string, never>
 }
 
 type Listener<T> = (req: T) => void
