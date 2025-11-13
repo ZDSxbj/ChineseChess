@@ -12,10 +12,12 @@ const (
 	messageJoin                          // 加入消息
 	messageCreate                        // 创建房间消息
 	messageGiveUp                        // 放弃消息
-	messageError  = 10
-    // ... 原有类型
-    messageRegretRequest MessageType = 11  // 悔棋请求
-    messageRegretResponse MessageType = 12 // 悔棋响应
+	messageError              = 10
+	// ... 原有类型
+	messageRegretRequest  MessageType = 11 // 悔棋请求
+	messageRegretResponse MessageType = 12 // 悔棋响应
+	messageDrawRequest    MessageType = 13 // 和棋请求
+	messageDrawResponse   MessageType = 14 // 和棋响应
 )
 
 type BaseMessage struct {
@@ -54,6 +56,11 @@ type endMessage struct {
 }
 
 type RegretResponseMessage struct {
-    BaseMessage
-    Accepted bool `json:"accepted"`
+	BaseMessage
+	Accepted bool `json:"accepted"`
+}
+
+type DrawResponseMessage struct {
+	BaseMessage
+	Accepted bool `json:"accepted"`
 }

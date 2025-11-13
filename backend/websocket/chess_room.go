@@ -11,13 +11,14 @@ var (
 )
 
 type ChessRoom struct {
-	Id      int
-	Nums    int     // 已有人数
-	Current *Client // 先进入房间的作为先手，默认为当前玩家
-	Next    *Client // 后进入房间的作为后手，默认为下一个玩家
-	History []Position
+	Id              int
+	Nums            int     // 已有人数
+	Current         *Client // 先进入房间的作为先手，默认为当前玩家
+	Next            *Client // 后进入房间的作为后手，默认为下一个玩家
+	History         []Position
 	RegretRequester *Client // 新增：记录悔棋请求发起方
-	mu      sync.Mutex    // 保护History等共享资源
+	DrawRequester   *Client
+	mu              sync.Mutex // 保护History等共享资源
 }
 
 func NewChessRoom() *ChessRoom {
@@ -69,7 +70,7 @@ func (cr *ChessRoom) join(c *Client) error {
 	c.RoomId = cr.Id
 	if cr.Current == nil {
 		cr.Current = c
-	} else  {
+	} else {
 		cr.Next = c
 	}
 
@@ -94,4 +95,3 @@ func (cr *ChessRoom) join(c *Client) error {
 // 	}
 // 	return fmt.Errorf("不在该房间")
 // }
-

@@ -15,6 +15,8 @@ const MessageType = {
   Error: 10,
   RegretRequest: 11, // 悔棋请求
   RegretResponse: 12, // 悔棋响应
+  DrawRequest: 13, // 新增：和棋请求
+  DrawResponse: 14, // 新增：和棋响应
 } as const
 
 interface WebSocketMessage {
@@ -26,7 +28,7 @@ interface WebSocketMessage {
   timestamp?: number
   winner?: 0 | 1 | 2
   roomId?: number
-  accepted?: boolean // 新增：用于悔棋响应的布尔值字段
+  accepted?: boolean // 新增：用于悔棋/和棋响应的布尔值字段
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -51,6 +53,8 @@ export interface WebSocketService {
   giveUp: () => void
   sendRegretRequest: () => void
   sendRegretResponse: (accepted: boolean) => void
+  sendDrawRequest: () => void 
+  sendDrawResponse: (accepted: boolean) => void 
 }
 
 export function useWebSocket(): WebSocketService {
@@ -109,13 +113,23 @@ export function useWebSocket(): WebSocketService {
         resolve?.()
         break
       case MessageType.RegretRequest:
-        // 收到悔悔棋请求给UI
+        // 收到悔棋请求给UI
         channel.emit('NET:CHESS:REGRET:REQUEST', {})
         break
       case MessageType.RegretResponse: {
         // 处理悔棋响应
         const accepted = data.accepted
         channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted })
+        break
+      }
+      case MessageType.DrawRequest:
+        // 新增：收到和棋请求给UI
+        channel.emit('NET:CHESS:DRAW:REQUEST', {})
+        break
+      case MessageType.DrawResponse: {
+        // 新增：处理和棋响应
+        const accepted = data.accepted
+        channel.emit('NET:CHESS:DRAW:RESPONSE', { accepted })
         break
       }
       default:
@@ -230,5 +244,20 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
-  return { connect, close, end, match, move, join, create, giveUp, sendRegretRequest, sendRegretResponse }
+// 新增：发送和棋请求
+  const sendDrawRequest = () => {
+    sendMessage({
+      type: MessageType.DrawRequest,
+    })
+  }
+
+  // 新增：发送和棋响应
+  const sendDrawResponse = (accepted: boolean) => {
+    sendMessage({
+      type: MessageType.DrawResponse,
+      accepted,
+    })
+  }
+  
+  return { connect, close, end, match, move, join, create, giveUp, sendRegretRequest, sendRegretResponse, sendDrawRequest, sendDrawResponse }
 }
