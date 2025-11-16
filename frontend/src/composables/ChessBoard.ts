@@ -138,7 +138,7 @@ class ChessBoard {
     if (targetPiece) {
       if (targetPiece instanceof King) {
         const winner = this.currentRole === 'self' ? this.selfColor : targetPiece.color
-        channel.emit('GAME:END', { winner })
+        channel.emit('GAME:END', { winner, isResign: false })
         this.end(winner)
       }
     }
@@ -186,7 +186,10 @@ class ChessBoard {
 
   private end(winner: string) {
     this.chessesElement.removeEventListener('click', this.clickCallback)
-    showMsg(winner)
+    // 判断当前玩家是胜利还是失败
+    const result = winner === this.selfColor ? 'win' : 'lose';
+    this.endGame(result); // 调用统一结束方法
+    showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`);
   }
 
   private selectPiece(piece: ChessPiece) {
@@ -677,12 +680,12 @@ public endGame(result: 'win' | 'lose' | 'draw' = 'draw') {
   
   // 根据结果显示不同消息
   const message = {
-    'win': '游戏胜利！',
-    'lose': '游戏失败！',
-    'draw': '游戏结束，和棋！'
-  }[result]
+    'win': '恭喜，你胜利了！',
+    'lose': '很遗憾，你失败了！',
+    'draw': '游戏结束，双方和棋！'
+  }[result];
   
-  console.log(message)
+  showMsg(message);
 }
 
 // 新增：获取游戏状态

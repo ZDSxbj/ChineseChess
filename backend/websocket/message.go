@@ -16,18 +16,6 @@ const (
 	messageRegretRequest  MessageType = 11 // 悔棋请求
 	messageRegretResponse MessageType = 12 // 悔棋响应
 	messageChatMessage    MessageType = 15 // 聊天消息 (与前端保持一致)
-	messageNormal MessageType = iota + 1 // 普通消息
-	messageMatch                         // 匹配消息
-	messageMove                          // 移动消息
-	messageStart                         // 开始消息
-	messageEnd                           // 结束消息
-	messageJoin                          // 加入消息
-	messageCreate                        // 创建房间消息
-	messageGiveUp                        // 放弃消息
-	messageError              = 10
-	// ... 原有类型
-	messageRegretRequest  MessageType = 11 // 悔棋请求
-	messageRegretResponse MessageType = 12 // 悔棋响应
 	messageDrawRequest    MessageType = 13 // 和棋请求
 	messageDrawResponse   MessageType = 14 // 和棋响应
 )

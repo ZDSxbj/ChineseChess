@@ -6,7 +6,8 @@ interface GameEvents {
     color: color
   }
   'GAME:END': {
-    winner: color
+    winner: color | null  // 允许 null（用于和棋场景）
+    isResign: boolean 
   }
   'NET:GAME:START': {
     color: color

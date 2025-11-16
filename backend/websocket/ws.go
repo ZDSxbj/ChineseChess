@@ -16,8 +16,8 @@ import (
 
 	"chinese-chess-backend/database"
 	"chinese-chess-backend/dto"
-	"chinese-chess-backend/dto/room"
-	dtouser "chinese-chess-backend/dto/user"
+
+	// dtouser "chinese-chess-backend/dto/user"
 	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/utils"
 	"slices"
@@ -300,10 +300,12 @@ func (ch *ChessHub) Run() {
 				r := NewChessRoom()
 				r.join(client)
 				ch.Rooms[r.Id] = r
-				roomInfo := room.RoomInfo{
+				roomInfo := RoomInfo{
 					Id: client.RoomId,
-					Current: dtouser.UserInfo{
-						ID: uint(client.Id),
+					Current: UserInfo{
+						ID:   uint(client.Id),
+						Name: client.Username,
+						Exp:  0,
 					},
 				}
 				ch.mu.Lock()
