@@ -16,6 +16,8 @@ type ChessRoom struct {
 	Current         *Client // 先进入房间的作为先手，默认为当前玩家
 	Next            *Client // 后进入房间的作为后手，默认为下一个玩家
 	History         []Position
+	RegretRequester *Client // 新增：记录悔棋请求发起方
+	DrawRequester   *Client
 	mu              sync.Mutex // 保护History等共享资源
 }
 
