@@ -1,8 +1,18 @@
 import type { Board, ChessColor, ChessPiece, ChessPosition, ChessRole } from './ChessPiece'
+import type { GameState } from '@/store/gameStore';
+import type { WebSocketService } from '@/websocket'
 import { showMsg } from '@/components/MessageBox'
+import { saveGameState, getGameState, clearGameState  } from '@/store/gameStore'
 import channel from '@/utils/channel'
 import { ChessFactory, King } from './ChessPiece'
 import Drawer from './drawer'
+
+// 声明 window 对象上有 ws 属性
+declare global {
+  interface Window {
+    ws: WebSocketService
+  }
+}
 
 class ChessBoard {
   private board: Board
@@ -19,7 +29,7 @@ class ChessBoard {
   private isNetPlay: boolean = false
   private clickCallback: (event: MouseEvent) => void = () => {}
   // 新增：存储走棋历史（记录移动前的状态）
-  private moveHistory: Array<{
+  public moveHistory: Array<{
     from: ChessPosition
     to: ChessPosition
     capturedPiece: ChessPiece | null// 被吃掉的棋子（如果有）
@@ -61,6 +71,10 @@ class ChessBoard {
 
   get Color(): ChessColor {
     return this.selfColor
+  }
+
+  get moveHistoryList() {
+    return this.moveHistory
   }
 
   private clickHandler(event: MouseEvent) {
@@ -118,7 +132,6 @@ class ChessBoard {
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
     })
     piece.move(to)
-
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
@@ -133,6 +146,13 @@ class ChessBoard {
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
+    saveGameState({
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    })
+
     // showMsg(`现在是${this.currentRole}的回合`)
   }
 
@@ -154,7 +174,39 @@ class ChessBoard {
     }
     this.drawChesses()
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    saveGameState({
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    })
     return true
+  }
+
+  public restoreState(savedState: GameState): void {
+    // 恢复基础配置（覆盖初始设置）
+    this.start(savedState.selfColor, savedState.isNetPlay)
+
+    // 恢复历史记录和当前回合
+    this.moveHistory = savedState.moveHistory // 注意：这里直接赋值私有属性，或通过setter
+    this.currentRole = savedState.currentRole
+
+    // 重新应用历史记录到棋盘
+    this.clear() // 清空当前棋盘
+    this.initChesses() // 重新初始化棋子
+
+    // 遍历历史步骤，还原每一步移动
+    savedState.moveHistory.forEach((step) => {
+      const piece = this.board[step.from.x][step.from.y]
+      if (piece) {
+        piece.move(step.to)
+        delete this.board[step.from.x][step.from.y]
+        this.board[step.to.x][step.to.y] = piece
+      }
+    })
+
+    this.drawChesses()
+    this.drawBoard()
   }
 
   // 判断是否是自己的回合

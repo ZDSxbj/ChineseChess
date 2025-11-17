@@ -28,8 +28,8 @@ interface WebSocketMessage {
   winner?: 0 | 1 | 2
   roomId?: number
   accepted?: boolean // 用于悔棋响应的布尔值字段
-  content?: string  // 聊天消息内容
-  sender?: string   // 聊天消息发送者
+  content?: string // 聊天消息内容
+  sender?: string // 聊天消息发送者
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -55,11 +55,12 @@ export interface WebSocketService {
   sendRegretRequest: () => void
   sendRegretResponse: (accepted: boolean) => void
   sendChatMessage: (content: string) => void // 新增发送聊天消息方法
+  getCurrentRoomId: () => number | undefined // 新增获取当前房间ID方法
 }
 
 export function useWebSocket(): WebSocketService {
   const socket = ref<WebSocket | null>(null)
-
+  const currentRoomId = ref<number | undefined>(undefined) // 新增：记录当前房间ID
   let resolve: (value?: unknown) => void
   // let reject: (reason?: unknown) => void
 
@@ -168,6 +169,7 @@ export function useWebSocket(): WebSocketService {
   }
 
   const join = (roomId: number) => {
+    currentRoomId.value = roomId // 记录当前房间ID
     sendMessage({
       type: MessageType.Join,
       roomId,
@@ -250,7 +252,10 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
-  return { 
+  // 新增：获取当前房间ID的方法
+  const getCurrentRoomId = () => currentRoomId.value
+
+  return {
     connect,
     close,
     end,
@@ -261,6 +266,7 @@ export function useWebSocket(): WebSocketService {
     giveUp,
     sendRegretRequest,
     sendRegretResponse,
-    sendChatMessage
+    sendChatMessage,
+    getCurrentRoomId, // 新增导出获取当前房间ID的方法
   }
 }

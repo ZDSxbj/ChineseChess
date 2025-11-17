@@ -3,11 +3,12 @@ import type { Ref } from 'vue'
 import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import ChatPanel from '@/components/ChatPanel.vue'
 import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
+import { clearGameState, getGameState, saveGameState } from '@/store/gameStore'
 import channel from '@/utils/channel'
-import ChatPanel from '@/components/ChatPanel.vue'
 
 const router = useRouter()
 const chatPanelRef = ref()
@@ -58,6 +59,9 @@ function giveUp() {
 
 function quit() {
   giveUp()
+  clearGameState() // 退出时清除状态
+  const currentState = history.state
+  window.history.pushState(currentState, '', window.location.href)
   router.push('/')
 }
 // 新增悔棋函数
@@ -84,6 +88,20 @@ function regret() {
     }
   }
 }
+
+// 处理回退事件
+function handlePopState(event: PopStateEvent) {
+  // 阻止回退
+  const currentState = history.state
+  window.history.pushState(currentState, '', window.location.href)
+  // 提示用户，防止意外退出
+  showMsg('请通过游戏内的退出按钮退出游戏')
+}
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  event.preventDefault()
+  // event.returnValue = '不要刷新' // 标准方式
+  return '不要刷新' // 兼容某些浏览器
+}
 onMounted(() => {
   const gridSize = decideSize(isPC.value)
   const canvasBackground = background.value as HTMLCanvasElement
@@ -98,10 +116,24 @@ onMounted(() => {
   chessBoard = new ChessBoard(canvasBackground, canvasChesses, gridSize)
   chessBoard.start('red', false)
   console.log('ChessBoard started')
+  // 尝试加载保存的游戏状态
+  const savedState = getGameState()
+  if (savedState) {
+    chessBoard.restoreState(savedState)
+    console.log('Game state restored from localStorage')
+  }
   channel.on('NET:GAME:START', ({ color }) => {
     console.log('Game started, color:', color)
     chessBoard.stop()
     chessBoard.start(color, true)
+    // 新增：保存初始游戏状态
+    saveGameState({
+      isNetPlay: chessBoard.isNetworkPlay(),
+      roomId: ws.getCurrentRoomId(), // 需确保ws实例有currentRoomId属性（后续步骤补充）
+      selfColor: color,
+      moveHistory: chessBoard.moveHistoryList, // 初始为空
+      currentRole: chessBoard.currentRole,
+    })
   })
 
   // 监听聊天消息
@@ -131,8 +163,14 @@ onMounted(() => {
       showMsg('对方拒绝悔棋')
     }
   })
+  window.history.pushState(null, '', window.location.href) // 修改浏览器历史记录
+  window.addEventListener('popstate', handlePopState)
+  // 在页面刷新时给出提示
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 onUnmounted(() => {
+  window.removeEventListener('popstate', handlePopState)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   channel.off('NET:GAME:START')
   channel.off('NET:CHESS:REGRET:REQUEST')
   channel.off('NET:CHESS:REGRET:RESPONSE')
@@ -180,7 +218,6 @@ onUnmounted(() => {
           退出
         </button>
       </div>
-      
       <!-- 聊天面板 -->
       <div class="flex-1">
         <ChatPanel ref="chatPanelRef" :ws="ws" />

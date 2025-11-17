@@ -16,7 +16,6 @@ type ChessRoom struct {
 	Current         *Client // 先进入房间的作为先手，默认为当前玩家
 	Next            *Client // 后进入房间的作为后手，默认为下一个玩家
 	History         []Position
-	RegretRequester *Client    // 新增：记录悔棋请求发起方
 	mu              sync.Mutex // 保护History等共享资源
 }
 
@@ -32,10 +31,6 @@ func NewChessRoom() *ChessRoom {
 		History: make([]Position, 0),
 	}
 }
-
-// func (cr * ChessRoom) isEmpty() bool {
-// 	return cr.Nums == 0
-// }
 
 func (cr *ChessRoom) isFull() bool {
 	return cr.Nums >= 2
@@ -95,22 +90,3 @@ func (cr *ChessRoom) join(c *Client) error {
 // 	return fmt.Errorf("不在该房间")
 // }
 
-// 处理聊天消息
-func (cr *ChessRoom) handleChat(sender *Client, content string) {
-	// 创建聊天消息
-	chatMsg := &ChatMessage{
-		BaseMessage: BaseMessage{Type: messageChatMessage},
-		Content:     content,
-		Sender:      sender.Username,
-	}
-
-	// 发送给对手
-	target := cr.Current
-	if sender == cr.Current {
-		target = cr.Next
-	}
-
-	if target != nil {
-		target.Send <- chatMsg
-	}
-}
