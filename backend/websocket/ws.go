@@ -470,7 +470,7 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 	}
 
 	// 添加详细日志
-	fmt.Printf("🔍 收到消息 - 类型: %d, 用户ID: %d, 房间ID: %s, 状态: %d\n",
+	fmt.Printf("🔍 收到消息 - 类型: %d, 用户ID: %d, 房间ID: %d, 状态: %d\n",
 		base.Type, client.Id, client.RoomId, client.Status)
 
 	switch base.Type {
@@ -671,18 +671,9 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 	return nil
 }
 
-func (ch *ChessHub) sendMessage(client *Client, message any) {
-	ch.commands <- hubCommand{
-		commandType: commandSendMessage,
-		payload: sendMessageRequest{
-			target:  client,
-			message: message,
-		},
-	}
-}
-
-// 新增：处理悔棋请求（转发给对手）
-func (ch *ChessHub) handleRegretRequest(requester *Client) {
+// 新增：处理和棋请求（转发给对手）
+func (ch *ChessHub) handleDrawRequest(requester *Client) {
+	fmt.Printf("🚀 进入 handleDrawRequest，用户: %d, 房间: %s\n", requester.Id, requester.RoomId)
 	ch.mu.Lock()
 	room, ok := ch.Rooms[requester.RoomId]
 	ch.mu.Unlock()
@@ -708,16 +699,17 @@ func (ch *ChessHub) handleRegretRequest(requester *Client) {
 		})
 		return
 	}
-
-	// 向对手发送悔棋请求
+	fmt.Printf("📤 准备向对手发送和棋请求，对手ID: %d\n", opponent.Id)
+	// 向对手发送和棋请求
 	opponent.sendMessage(NormalMessage{
-		BaseMessage: BaseMessage{Type: messageRegretRequest},
-		Message:     "对方请求悔棋",
+		BaseMessage: BaseMessage{Type: messageDrawRequest},
+		Message:     "对方请求和棋",
 	})
+	fmt.Printf("✅ 和棋请求发送完成\n")
 }
 
-// 新增：处理悔棋响应（同步双方状态）
-func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
+// 新增：处理和棋响应（同步双方状态）
+func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
 	ch.mu.Lock()
 	room, ok := ch.Rooms[responder.RoomId]
 	ch.mu.Unlock()
@@ -729,7 +721,7 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 		return
 	}
 
-	// 确定悔棋请求发起方
+	// 确定和棋请求发起方
 	var requester *Client
 	if room.Current == responder {
 		requester = room.Next
@@ -745,28 +737,27 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 	}
 
 	if accepted {
-		// 同意悔棋：同步双方执行悔棋，更新房间历史记录
-		room.mu.Lock()
-		if len(room.History) > 0 {
-			room.History = room.History[:len(room.History)-1] // 移除最后一步,这个有争议，需要后续修改
-		}
-		room.mu.Unlock()
-
-		// 通知请求方执行悔棋
-		respMsg := RegretResponseMessage{
-			BaseMessage: BaseMessage{Type: messageRegretResponse},
+		// 同意和棋：通知双方和棋成功
+		drawMsg := DrawResponseMessage{
+			BaseMessage: BaseMessage{Type: messageDrawResponse},
 			Accepted:    true,
+			// Message:     "对方同意和棋，游戏结束",
 		}
-		requester.sendMessage(respMsg)
-		if room.Current == responder {
-			room.Current = requester
-			room.Next = responder
+
+		requester.sendMessage(drawMsg)
+
+		// 同时发送游戏结束命令
+		ch.commands <- hubCommand{
+			commandType: commandEnd,
+			client:      responder,
+			payload:     roleNone, // 和棋没有胜者
 		}
 	} else {
-		// 拒绝悔棋：仅通知请求方
-		requester.sendMessage(RegretResponseMessage{
-			BaseMessage: BaseMessage{Type: messageRegretResponse},
+		// 拒绝和棋：仅通知请求方
+		requester.sendMessage(DrawResponseMessage{
+			BaseMessage: BaseMessage{Type: messageDrawResponse},
 			Accepted:    false,
+			// Message:     "对方拒绝和棋",
 		})
 	}
 }

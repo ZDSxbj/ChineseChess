@@ -96,41 +96,42 @@ export function useWebSocket(): WebSocketService {
         channel.emit('NET:GAME:START', { color: role })
         break }
       case MessageType.End: {
-        const { winner } = data;
+        const { winner } = data
         if (winner === undefined) {
-          return;
+          return
         }
 
         // 1. 映射winner到颜色和结果文本
         const winnerMap = {
-          0: { color: null, text: '和棋' },       // 和棋
-          1: { color: 'red', text: '红胜' },     // 红方胜利
-          2: { color: 'black', text: '黑胜' }    // 黑方胜利
-        } as const;
+          0: { color: null, text: '和棋' }, // 和棋
+          1: { color: 'red', text: '红胜' }, // 红方胜利
+          2: { color: 'black', text: '黑胜' }, // 黑方胜利
+        } as const
 
-        const { color: winnerColor, text: resultText } = winnerMap[winner];
+        const { color: winnerColor, text: resultText } = winnerMap[winner]
 
         // 2. 判断是否为认输（关键逻辑）
         // 规则：如果是和棋（0），则不是认输；如果是1/2，需要根据业务推断是否为认输
         // （假设：认输导致的胜利会通过该消息返回，这里统一标记为isResign，实际可根据后端是否传参调整）
-        const isResign = winner !== 0; // 非和棋的结束都可能是认输或将死，先统一标记（后续可细化）
+        const isResign = winner !== 0 // 非和棋的结束都可能是认输或将死，先统一标记（后续可细化）
 
         // 3. 发送事件给ChessView，附带详细信息
         channel.emit('GAME:END', {
-          winner: winnerColor,  // 胜利方颜色（red/black/null）
-          isResign,             // 是否为认输导致的结束
-        });
+          winner: winnerColor, // 胜利方颜色（red/black/null）
+          isResign, // 是否为认输导致的结束
+        })
 
         // 4. 显示基础消息（可根据是否为认输细化）
         if (isResign) {
           // 认输场景：明确提示“对方认输”
-          const loserText = winner === 1 ? '黑方' : '红方';
-          showMsg(`${loserText}已认输，${resultText}`);
-        } else {
-          // 和棋或正常胜利
-          showMsg(resultText);
+          const loserText = winner === 1 ? '黑方' : '红方'
+          showMsg(`${loserText}已认输，${resultText}`)
         }
-        break;
+        else {
+          // 和棋或正常胜利
+          showMsg(resultText)
+        }
+        break
       }
       case MessageType.Error:
       { const { message: errorMessage } = data
@@ -294,6 +295,19 @@ export function useWebSocket(): WebSocketService {
   // 新增：获取当前房间ID的方法
   const getCurrentRoomId = () => currentRoomId.value
 
+  // 新增：发送和棋响应
+  const sendDrawResponse = (accepted: boolean) => {
+    sendMessage({
+      type: MessageType.DrawResponse,
+      accepted,
+    })
+  }
+  // 新增：发送和棋请求
+  const sendDrawRequest = () => {
+    sendMessage({
+      type: MessageType.DrawRequest,
+    })
+  }
   return {
     connect,
     close,
@@ -307,20 +321,7 @@ export function useWebSocket(): WebSocketService {
     sendRegretResponse,
     sendChatMessage,
     getCurrentRoomId, // 新增导出获取当前房间ID的方法
-// 新增：发送和棋请求
-  const sendDrawRequest = () => {
-    sendMessage({
-      type: MessageType.DrawRequest,
-    })
+    sendDrawRequest,
+    sendDrawResponse,
   }
-
-  // 新增：发送和棋响应
-  const sendDrawResponse = (accepted: boolean) => {
-    sendMessage({
-      type: MessageType.DrawResponse,
-      accepted,
-    })
-  }
-
-  return { connect, close, end, match, move, join, create, giveUp, sendRegretRequest, sendRegretResponse, sendDrawRequest, sendDrawResponse, sendChatMessage }
 }

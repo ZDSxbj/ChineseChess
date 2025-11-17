@@ -35,6 +35,7 @@ class ChessBoard {
     capturedPiece: ChessPiece | null// 被吃掉的棋子（如果有）
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
   }> = []
+
   // 新增：游戏结束状态
   private gameEnded: boolean = false
 
@@ -239,9 +240,9 @@ class ChessBoard {
   private end(winner: string) {
     this.chessesElement.removeEventListener('click', this.clickCallback)
     // 判断当前玩家是胜利还是失败
-    const result = winner === this.selfColor ? 'win' : 'lose';
-    this.endGame(result); // 调用统一结束方法
-    showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`);
+    const result = winner === this.selfColor ? 'win' : 'lose'
+    this.endGame(result) // 调用统一结束方法
+    showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`)
   }
 
   private selectPiece(piece: ChessPiece) {
@@ -722,28 +723,28 @@ class ChessBoard {
   }
 
   // 新增：结束游戏，禁用所有操作
-public endGame(result: 'win' | 'lose' | 'draw' = 'draw') {
-  this.gameEnded = true
-  // 取消棋子选择
-  this.selectedPiece?.deselect()
-  this.selectedPiece = null
-  // 移除点击事件监听
-  this.chessesElement.removeEventListener('click', this.clickCallback)
-  
-  // 根据结果显示不同消息
-  const message = {
-    'win': '恭喜，你胜利了！',
-    'lose': '很遗憾，你失败了！',
-    'draw': '游戏结束，双方和棋！'
-  }[result];
-  
-  showMsg(message);
-}
+  public endGame(result: 'win' | 'lose' | 'draw' = 'draw') {
+    this.gameEnded = true
+    // 取消棋子选择
+    this.selectedPiece?.deselect()
+    this.selectedPiece = null
+    // 移除点击事件监听
+    this.chessesElement.removeEventListener('click', this.clickCallback)
 
-// 新增：获取游戏状态
-public isGameEnded(): boolean {
-  return this.gameEnded
-}
+    // 根据结果显示不同消息
+    const message = {
+      win: '恭喜，你胜利了！',
+      lose: '很遗憾，你失败了！',
+      draw: '游戏结束，双方和棋！',
+    }[result]
+
+    showMsg(message)
+  }
+
+  // 新增：获取游戏状态
+  public isGameEnded(): boolean {
+    return this.gameEnded
+  }
 }
 
 export default ChessBoard

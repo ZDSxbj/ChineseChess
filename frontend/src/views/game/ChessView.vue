@@ -3,14 +3,14 @@ import type { Ref } from 'vue'
 import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import channel from '@/utils/channel'
-import { showMsg } from '@/components/MessageBox'
-import DrawModal from '@/components/DrawModal.vue'
-import RegretModal from '@/components/RegretModal.vue'
-
-import ChessBoard from '@/composables/ChessBoard'
-
 import ChatPanel from '@/components/ChatPanel.vue'
+import DrawModal from '@/components/DrawModal.vue'
+import { showMsg } from '@/components/MessageBox'
+import RegretModal from '@/components/RegretModal.vue'
+import ChessBoard from '@/composables/ChessBoard'
+import { clearGameState, getGameState, saveGameState } from '@/store/gameStore'
+
+import channel from '@/utils/channel'
 
 const router = useRouter()
 const chatPanelRef = ref()
@@ -79,16 +79,17 @@ watch(isPC, (newIsPC) => {
 })
 
 function giveUp() {
-  if (gameEnded.value) return // 游戏结束后禁用
+  if (gameEnded.value)
+    return // 游戏结束后禁用
   ws?.giveUp()
   // 新增：处理认输后的游戏结束状态
-  const loserColor = chessBoard?.Color; // 自己的颜色（认输方）
-  const winnerColor = loserColor === 'red' ? 'black' : 'red'; // 对方颜色（胜方）
+  const loserColor = chessBoard?.Color // 自己的颜色（认输方）
+  const winnerColor = loserColor === 'red' ? 'black' : 'red' // 对方颜色（胜方）
   // 触发本地GAME:END事件，明确是认输
   channel.emit('GAME:END', {
     winner: winnerColor,
-    isResign: true
-  });
+    isResign: true,
+  })
 }
 
 function quit() {
@@ -100,7 +101,8 @@ function quit() {
 }
 // 新增悔棋函数
 function regret() {
-  if (gameEnded.value) return // 游戏结束后禁用
+  if (gameEnded.value)
+    return // 游戏结束后禁用
   if (chessBoard) {
     if (!chessBoard.stepsNum) {
       showMsg('没有可悔棋的步数')
@@ -125,21 +127,18 @@ function regret() {
 }
 
 // 处理回退事件
-function handlePopState(event: PopStateEvent) {
+function handlePopState(_event: PopStateEvent) {
   // 阻止回退
   const currentState = history.state
   window.history.pushState(currentState, '', window.location.href)
   // 提示用户，防止意外退出
   showMsg('请通过游戏内的退出按钮退出游戏')
 }
-function handleBeforeUnload(event: BeforeUnloadEvent) {
-  event.preventDefault()
-  // event.returnValue = '不要刷新' // 标准方式
-  return '不要刷新' // 兼容某些浏览器
-}
+
 // 新增：和棋函数
 function draw() {
-  if (gameEnded.value) return // 游戏结束后禁用
+  if (gameEnded.value)
+    return // 游戏结束后禁用
 
   if (chessBoard) {
     if (chessBoard.isNetworkPlay()) {
@@ -192,24 +191,26 @@ onMounted(() => {
   })
 
   // 监听游戏结束事件（将死/认输时触发）
-channel.on('GAME:END', ({ winner, isResign = false }) => {
-  gameEnded.value = true;
-  const result = winner === chessBoard?.Color ? 'win' : 'lose';
-  chessBoard?.endGame(result);
+  channel.on('GAME:END', ({ winner, isResign = false }) => {
+    gameEnded.value = true
+    const result = winner === chessBoard?.Color ? 'win' : 'lose'
+    chessBoard?.endGame(result)
 
-  // 根据是否为认输，显示不同消息
-  if (isResign) {
-    // 认输场景：明确提示“对方认输”
-    if (result === 'win') {
-      showMsg('对方已认输，你胜利了！');
-    } else {
-      showMsg('你已认输，游戏结束！');
+    // 根据是否为认输，显示不同消息
+    if (isResign) {
+      // 认输场景：明确提示“对方认输”
+      if (result === 'win') {
+        showMsg('对方已认输，你胜利了！')
+      }
+      else {
+        showMsg('你已认输，游戏结束！')
+      }
     }
-  } else {
-    // 将死场景：提示“胜利”
-    showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`);
-  }
-})
+    else {
+      // 将死场景：提示“胜利”
+      showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`)
+    }
+  })
 
   // 监听聊天消息
   channel.on('NET:CHAT:MESSAGE', ({ sender, content }) => {
@@ -240,8 +241,6 @@ channel.on('GAME:END', ({ winner, isResign = false }) => {
   })
   window.history.pushState(null, '', window.location.href) // 修改浏览器历史记录
   window.addEventListener('popstate', handlePopState)
-  // 在页面刷新时给出提示
-  window.addEventListener('beforeunload', handleBeforeUnload)
   // 监听和棋请求
   channel.on('NET:CHESS:DRAW:REQUEST', () => {
     drawModalType.value = 'responding'
@@ -266,7 +265,6 @@ channel.on('GAME:END', ({ winner, isResign = false }) => {
 
 onUnmounted(() => {
   window.removeEventListener('popstate', handlePopState)
-  window.removeEventListener('beforeunload', handleBeforeUnload)
   channel.off('NET:GAME:START')
   channel.off('GAME:END')
   channel.off('NET:GAME:END')
