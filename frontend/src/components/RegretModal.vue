@@ -4,6 +4,7 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   visible: boolean
   type: 'requesting' | 'responding'
+  mode?: 'regret' | 'draw'
   onAccept?: () => void
   onReject?: () => void
 }>()
@@ -45,17 +46,18 @@ watch(
   () => [props.visible, props.type],
   ([newVisible, newType]) => {
     if (newVisible) {
-      // 显示时根据 type 初始化
+      // 显示时根据 type 和 mode 初始化
+      const m = props.mode || 'regret'
       if (newType === 'requesting') {
         title.value = '等待回应'
-        message.value = '对方正在考虑是否同意悔棋'
+        message.value = m === 'draw' ? '对方正在考虑是否同意和棋' : '对方正在考虑是否同意悔棋'
         showCountdown.value = false
         showButtons.value = false
         clearTimer() // 请求方不需要倒计时
       }
       else {
-        title.value = '悔棋请求'
-        message.value = '对方请求悔棋，是否同意？'
+        title.value = m === 'draw' ? '和棋请求' : '悔棋请求'
+        message.value = m === 'draw' ? '对方请求和棋，是否同意？' : '对方请求悔棋，是否同意？'
         showCountdown.value = true
         showButtons.value = true
         autoAction.value = '拒绝'

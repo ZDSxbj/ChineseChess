@@ -14,7 +14,7 @@ type SMTPConfig struct {
 }
 
 type Config struct {
-	SMTPConfig `json:"smtp"`
+	SMTPConfig     `json:"smtp"`
 }
 
 var (

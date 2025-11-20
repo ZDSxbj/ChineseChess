@@ -140,26 +140,11 @@ class King extends ChessPiece {
       return false
     }
 
-    let nums = 0
-    // 检查路径上是否有棋子
-    for (let i = Math.min(this.position.y, y) + 1; i < Math.max(this.position.y, y); i++) {
-      if (board[this.position.x][i]) {
-        nums++
-      }
-    }
-    if (nums === 0) {
-      const targetPiece = board[x][y]
-      if (targetPiece && targetPiece instanceof King) {
-        return true
-      }
-    }
-
     const { upY, downY } = this.role === 'enemy' ? { upY: 0, downY: 2 } : { upY: 7, downY: 9 }
     if (y < upY || y > downY) {
       return false
     }
 
-    if ((x - this.position.x) ** 2 + (y - this.position.y) ** 2 > 2) {
       return false
     }
 
@@ -420,33 +405,20 @@ class Cannon extends ChessPiece {
       throw new Error('Board is required for King movement validation')
     // const arr: ChessPosition[] = []
     const { x, y } = newPosition
-
     if (x !== this.position.x && y !== this.position.y) {
       return false
     }
 
-    // 检查路径上是否有棋子
-    let nums = 0
     if (x === this.position.x) {
       for (let i = Math.min(this.position.y, y) + 1; i < Math.max(this.position.y, y); i++) {
         if (board[this.position.x][i]) {
-          nums++
         }
       }
-    }
-    else {
       for (let i = Math.min(this.position.x, x) + 1; i < Math.max(this.position.x, x); i++) {
         if (board[i][this.position.y]) {
-          nums++
         }
       }
     }
-    const piece = board[x][y]
-    if (piece) {
-      nums++
-    }
-    if (nums !== 2 && nums !== 0) {
-      return false
     }
 
     return true
