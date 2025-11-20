@@ -95,6 +95,10 @@ function giveUp() {
 function quit() {
   giveUp()
   clearGameState() // 退出时清除状态
+  // 关键：导航到首页前，先替换历史记录
+  // const homeUrl = router.resolve('/').href // 获取首页URL
+  // 用首页URL替换当前历史记录（游戏页面）
+  // window.history.replaceState(null, '', homeUrl)
   router.push('/')
 }
 // 新增悔棋函数
