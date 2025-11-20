@@ -16,8 +16,6 @@ const MessageType = {
   RegretRequest: 11, // 悔棋请求
   RegretResponse: 12, // 悔棋响应
   ChatMessage: 15, // 聊天消息
-  DrawRequest: 13, // 新增：和棋请求
-  DrawResponse: 14, // 新增：和棋响应
 } as const
 
 interface WebSocketMessage {
@@ -30,8 +28,6 @@ interface WebSocketMessage {
   winner?: 0 | 1 | 2
   roomId?: number
   accepted?: boolean // 用于悔棋响应的布尔值字段
-  content?: string // 聊天消息内容
-  sender?: string // 聊天消息发送者
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -95,44 +91,10 @@ export function useWebSocket(): WebSocketService {
         channel.emit('MATCH:SUCCESS', null)
         channel.emit('NET:GAME:START', { color: role })
         break }
-      case MessageType.End: {
-        const { winner } = data
         if (winner === undefined) {
           return
         }
-
-        // 1. 映射winner到颜色和结果文本
-        const winnerMap = {
-          0: { color: null, text: '和棋' }, // 和棋
-          1: { color: 'red', text: '红胜' }, // 红方胜利
-          2: { color: 'black', text: '黑胜' }, // 黑方胜利
-        } as const
-
-        const { color: winnerColor, text: resultText } = winnerMap[winner]
-
-        // 2. 判断是否为认输（关键逻辑）
-        // 规则：如果是和棋（0），则不是认输；如果是1/2，需要根据业务推断是否为认输
-        // （假设：认输导致的胜利会通过该消息返回，这里统一标记为isResign，实际可根据后端是否传参调整）
-        const isResign = winner !== 0 // 非和棋的结束都可能是认输或将死，先统一标记（后续可细化）
-
-        // 3. 发送事件给ChessView，附带详细信息
-        channel.emit('GAME:END', {
-          winner: winnerColor, // 胜利方颜色（red/black/null）
-          isResign, // 是否为认输导致的结束
-        })
-
-        // 4. 显示基础消息（可根据是否为认输细化）
-        if (isResign) {
-          // 认输场景：明确提示“对方认输”
-          const loserText = winner === 1 ? '黑方' : '红方'
-          showMsg(`${loserText}已认输，${resultText}`)
         }
-        else {
-          // 和棋或正常胜利
-          showMsg(resultText)
-        }
-        break
-      }
       case MessageType.Error:
       { const { message: errorMessage } = data
         showMsg(errorMessage?.toString() || 'Error occurred')
@@ -144,7 +106,6 @@ export function useWebSocket(): WebSocketService {
         resolve?.()
         break
       case MessageType.RegretRequest:
-        // 收到悔棋请求给UI
         channel.emit('NET:CHESS:REGRET:REQUEST', {})
         break
       case MessageType.RegretResponse: {
@@ -161,16 +122,6 @@ export function useWebSocket(): WebSocketService {
         }
         break
       }
-      case MessageType.DrawRequest:
-        // 新增：收到和棋请求给UI
-        channel.emit('NET:CHESS:DRAW:REQUEST', {})
-        break
-      case MessageType.DrawResponse: {
-        // 新增：处理和棋响应
-        const accepted = data.accepted
-        channel.emit('NET:CHESS:DRAW:RESPONSE', { accepted })
-        break
-      }
       default:
         break
     }
@@ -178,13 +129,9 @@ export function useWebSocket(): WebSocketService {
 
   const sendMessage = (message: WebSocketMessage) => {
     if (socket.value && socket.value.readyState === WebSocket.OPEN) {
-      // 打印发送的消息
       console.log('[WebSocket 发送]', message)
       socket.value.send(JSON.stringify(message))
     }
-    else {
-      console.log(socket.value, socket.value?.readyState)
-      showMsg('WebSocket is not open. Unable to send message.')
     }
   }
 
@@ -202,10 +149,6 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
-  const end = () => {
-    sendMessage({
-      type: MessageType.End,
-    })
   }
 
   const join = (roomId: number) => {
@@ -239,8 +182,6 @@ export function useWebSocket(): WebSocketService {
       channel.on('NET:CHESS:MOVE:END', ({ from, to }) => {
         move(from, to)
       })
-      channel.on('GAME:END', () => {
-        end()
       })
     }
 
@@ -294,21 +235,6 @@ export function useWebSocket(): WebSocketService {
 
   // 新增：获取当前房间ID的方法
   const getCurrentRoomId = () => currentRoomId.value
-
-  // 新增：发送和棋响应
-  const sendDrawResponse = (accepted: boolean) => {
-    sendMessage({
-      type: MessageType.DrawResponse,
-      accepted,
-    })
-  }
-  // 新增：发送和棋请求
-  const sendDrawRequest = () => {
-    sendMessage({
-      type: MessageType.DrawRequest,
-    })
-  }
-  return {
     connect,
     close,
     end,
@@ -322,6 +248,5 @@ export function useWebSocket(): WebSocketService {
     sendChatMessage,
     getCurrentRoomId, // 新增导出获取当前房间ID的方法
     sendDrawRequest,
-    sendDrawResponse,
   }
 }
