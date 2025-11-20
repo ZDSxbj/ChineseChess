@@ -27,9 +27,9 @@ func initRedis() {
 	password := os.Getenv("REDIS_PASSWORD") // 若未设置密码则为空字符串
 	addr := fmt.Sprintf("%s:%s", host, port)
 	rdb = redis.NewClient(&redis.Options{
-		Addr:     addr,     // Redis server address
-		Password: password, // no password set
-		DB:       0,        // use default DB
+		Addr:     addr, // Redis server address
+		Password: password,   // no password set
+		DB:       0,    // use default DB
 	})
 }
 
