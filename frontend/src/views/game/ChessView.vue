@@ -3,17 +3,15 @@ import type { Ref } from 'vue'
 import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import ChatPanel from '@/components/ChatPanel.vue'
-import DrawModal from '@/components/DrawModal.vue'
 import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
-import { clearGameState, getGameState, saveGameState } from '@/store/gameStore'
-
 import channel from '@/utils/channel'
+import ChatPanel from '@/components/ChatPanel.vue'
 
 const router = useRouter()
 const chatPanelRef = ref()
+const networkPlay = ref(false)
 
 const background = useTemplateRef('background')
 const chesses = useTemplateRef('chesses')
@@ -25,48 +23,52 @@ const ws = inject('ws') as WebSocketService
 
 const regretModalVisible = ref(false)
 const regretModalType = ref<'requesting' | 'responding'>('requesting')
-
-const drawModalVisible = ref(false) // 新增：和棋弹窗显示状态
-const drawModalType = ref<'requesting' | 'responding'>('requesting') // 新增：和棋弹窗类型
-const gameEnded = ref(false) // 新增：游戏结束状态
+const gameOver = ref(false)
+const drawModalVisible = ref(false)
+const drawModalType = ref<'requesting' | 'responding'>('requesting')
 
 function handleRegretAccept() {
-  // 同意悔棋，通知对方
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
   ws.sendRegretResponse(true)
-  // 自己也执行悔棋
   const steps = chessBoard.isMyTurn() ? 1 : 2
   for (let i = 0; i < steps; i++) {
     chessBoard?.regretMove()
   }
   showMsg(`悔了${steps}步棋`)
-  // 悔棋后固定为对方的回合
   chessBoard?.setCurrentRole('enemy')
-  regretModalVisible.value = false // 发送响应后销毁提示框
+  regretModalVisible.value = false
 }
 
 function handleRegretReject() {
-  // 拒绝悔棋，通知对方
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
   ws.sendRegretResponse(false)
-  regretModalVisible.value = false // 发送响应后销毁提示框
+  regretModalVisible.value = false
 }
 
-// 新增：处理和棋同意
 function handleDrawAccept() {
-  // 同意和棋，通知对方
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
   ws.sendDrawResponse(true)
-  // 游戏结束，显示和棋消息
-  showMsg('双方同意和棋，游戏结束！')
-  gameEnded.value = true // 设置游戏结束状态
-  // 新增：禁用棋盘操作
-  chessBoard?.endGame('draw')
+  // 接受和棋，后端会广播 GAME:END
   drawModalVisible.value = false
 }
 
-// 新增：处理和棋拒绝
 function handleDrawReject() {
-  // 拒绝和棋，通知对方
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
   ws.sendDrawResponse(false)
   drawModalVisible.value = false
+  showMsg('已拒绝对方的和棋请求')
 }
 
 function decideSize(isPCBool: boolean) {
@@ -79,74 +81,53 @@ watch(isPC, (newIsPC) => {
 })
 
 function giveUp() {
-  if (gameEnded.value)
-    return // 游戏结束后禁用
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
   ws?.giveUp()
-  // 新增：处理认输后的游戏结束状态
-  const loserColor = chessBoard?.Color // 自己的颜色（认输方）
-  const winnerColor = loserColor === 'red' ? 'black' : 'red' // 对方颜色（胜方）
-  // 触发本地GAME:END事件，明确是认输
-  channel.emit('GAME:END', {
-    winner: winnerColor,
-    isResign: true,
-  })
+}
+
+function offerDraw() {
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
+  ws.sendDrawRequest()
+  drawModalType.value = 'requesting'
+  drawModalVisible.value = true
+  showMsg('已发送和棋请求')
 }
 
 function quit() {
-  giveUp()
-  clearGameState() // 退出时清除状态
+  if (!gameOver.value) {
+    giveUp()
+  }
   router.push('/')
 }
 // 新增悔棋函数
 function regret() {
-  if (gameEnded.value)
-    return // 游戏结束后禁用
+  if (gameOver.value) {
+    showMsg('游戏已结束');
+    return;
+  }
   if (chessBoard) {
     if (!chessBoard.stepsNum) {
       showMsg('没有可悔棋的步数')
     }
     else if (chessBoard.isNetworkPlay()) {
-      // 新增判断：联网状态下，自身是黑子且历史步数为1时不能悔棋
       if (chessBoard.Color === 'black' && chessBoard.stepsNum === 1) {
         showMsg('没有可悔棋的步数')
         return
       }
-      // 联网模式：发送悔棋请求给对手
       ws.sendRegretRequest()
-      // 显示等待提示
       regretModalType.value = 'requesting'
       regretModalVisible.value = true
     }
     else {
-      // 本地模式：直接执行悔棋
       chessBoard.regretMove()
     }
   }
-}
-
-// 新增：和棋函数
-function draw() {
-  if (gameEnded.value)
-    return // 游戏结束后禁用
-
-  if (chessBoard) {
-    if (chessBoard.isNetworkPlay()) {
-      // 联网模式：发送和棋请求给对手
-      ws.sendDrawRequest()
-      // 显示等待提示
-      drawModalType.value = 'requesting'
-      drawModalVisible.value = true
-    }
-    else {
-      // 本地模式：直接显示和棋消息
-      showMsg('本地模式无法和棋')
-    }
-  }
-}
-
-function handlePopState(_event: PopStateEvent) {
-  window.history.pushState(null, '', window.location.href)
-  showMsg('请通过应用内的导航按钮进行操作')
 }
 onMounted(() => {
   const gridSize = decideSize(isPC.value)
@@ -161,54 +142,52 @@ onMounted(() => {
 
   chessBoard = new ChessBoard(canvasBackground, canvasChesses, gridSize)
   chessBoard.start('red', false)
+  networkPlay.value = false
   console.log('ChessBoard started')
-  // 尝试加载保存的游戏状态
-  const savedState = getGameState()
-  if (savedState) {
-    chessBoard.restoreState(savedState)
-    console.log('Game state restored from localStorage')
-  }
-
   channel.on('NET:GAME:START', ({ color }) => {
     console.log('Game started, color:', color)
     chessBoard.stop()
     chessBoard.start(color, true)
-    // 新增：保存初始游戏状态
-    saveGameState({
-      isNetPlay: chessBoard.isNetworkPlay(),
-      roomId: ws.getCurrentRoomId(), // 需确保ws实例有currentRoomId属性（后续步骤补充）
-      selfColor: color,
-      moveHistory: chessBoard.moveHistoryList, // 初始为空
-      currentRole: chessBoard.currentRole,
-    })
-  })
-
-  // 监听游戏结束事件（将死/认输时触发）
-  channel.on('GAME:END', ({ winner, isResign = false }) => {
-    gameEnded.value = true
-    const result = winner === chessBoard?.Color ? 'win' : 'lose'
-    chessBoard?.endGame(result)
-
-    // 根据是否为认输，显示不同消息
-    if (isResign) {
-      // 认输场景：明确提示“对方认输”
-      if (result === 'win') {
-        showMsg('对方已认输，你胜利了！')
-      }
-      else {
-        showMsg('你已认输，游戏结束！')
-      }
-    }
-    else {
-      // 将死场景：提示“胜利”
-      showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`)
-    }
+    networkPlay.value = true
   })
 
   // 监听聊天消息
   channel.on('NET:CHAT:MESSAGE', ({ sender, content }) => {
-    chatPanelRef.value?.receiveMessage(sender, content)
+    if (networkPlay.value && !gameOver.value) {
+      chatPanelRef.value?.receiveMessage(sender, content)
+    }
   })
+  // 监听和棋请求
+  channel.on('NET:DRAW:REQUEST', () => {
+    if (gameOver.value) return
+    // 展示与悔棋一致的模态交互
+    drawModalType.value = 'responding'
+    drawModalVisible.value = true
+    showMsg('对方请求和棋')
+  })
+
+  channel.on('NET:DRAW:RESPONSE', (data: any) => {
+    // 如果自己是请求方，收到响应时关闭请求模态
+    drawModalVisible.value = false
+    if (data.accepted) {
+      showMsg('对方同意和棋，局面以和棋结束')
+      gameOver.value = true
+      chessBoard?.disableInteraction()
+    } else {
+      showMsg('对方拒绝了和棋请求')
+    }
+  })
+    channel.on('NET:GAME:END', ({ winner }) => {
+      gameOver.value = true;
+      if (winner === 'red') {
+        showMsg('红方胜利');
+      } else if (winner === 'black') {
+        showMsg('黑方胜利');
+      } else {
+        showMsg('和棋');
+      }
+      chessBoard?.disableInteraction()
+    });
   // 监听悔棋请求
   channel.on('NET:CHESS:REGRET:REQUEST', () => {
     regretModalType.value = 'responding'
@@ -232,43 +211,13 @@ onMounted(() => {
       showMsg('对方拒绝悔棋')
     }
   })
-
-  channel.on('NET:CHESS:DRAW:REQUEST', () => {
-    drawModalType.value = 'responding'
-    drawModalVisible.value = true
-    showMsg('对方请求和棋')
-  })
-  // 监听和棋响应
-  channel.on('NET:CHESS:DRAW:RESPONSE', (data) => {
-    drawModalVisible.value = false
-    if (data.accepted) {
-      // 对方同意和棋，游戏结束
-      showMsg('双方同意和棋，游戏结束！')
-      gameEnded.value = true // 设置游戏结束状态
-      // 新增：禁用棋盘操作
-      chessBoard?.endGame('draw')
-    }
-    else {
-      showMsg('对方拒绝和棋')
-    }
-  })
-  window.history.pushState(null, '', window.location.href)
-  // 监听 popstate 事件，防止后退操作
-  window.addEventListener('popstate', (event) => {
-    handlePopState(event)
-  })
 })
-
 onUnmounted(() => {
   channel.off('NET:GAME:START')
-  channel.off('GAME:END')
-  channel.off('NET:GAME:END')
-  channel.off('NET:CHAT:MESSAGE')
   channel.off('NET:CHESS:REGRET:REQUEST')
   channel.off('NET:CHESS:REGRET:RESPONSE')
-  channel.off('NET:CHESS:DRAW:REQUEST') // 新增：取消和棋请求监听
-  channel.off('NET:CHESS:DRAW:RESPONSE') // 新增：取消和棋响应监听
-  window.removeEventListener('popstate', handlePopState)
+  channel.off('NET:DRAW:REQUEST')
+  channel.off('NET:DRAW:RESPONSE')
   chessBoard?.stop()
 })
 </script>
@@ -283,53 +232,52 @@ onUnmounted(() => {
       />
       <canvas ref="chesses" class="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/4" />
     </div>
-    <div class="sm:h-full sm:w-1/5">
-      <!-- 新增悔棋按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        :class="gameEnded ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-2 hover:bg-gray-9 hover:text-gray-2'"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="regret"
-        :disabled="gameEnded"
-      >
-        悔棋
-      </button>
-      <!-- 和棋按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        :class="gameEnded ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-2 hover:bg-gray-9 hover:text-gray-2'"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="draw"
-        :disabled="gameEnded"
-      >
-        和棋
-      </button>
-      <!-- 认输按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        :class="gameEnded ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-2 hover:bg-gray-9 hover:text-gray-2'"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="giveUp"
-        :disabled="gameEnded"
-      >
-        认输
-      </button>
-      <!-- 原有的退出按钮 -->
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        @click="quit"
-      >
-        退出
-      </button>
-    </div>
-    <!-- 聊天面板 -->
-    <div class="flex-1">
-      <ChatPanel ref="chatPanelRef" :ws="ws" />
+    <div class="sm:h-full sm:w-1/5 flex flex-col">
+      <div class="flex flex-col space-y-4 mb-4">
+        <!-- 新增悔棋按钮 -->
+        <button
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="regret"
+        >
+          悔棋
+        </button>
+        <!-- 原有的认输按钮 -->
+        <button
+          v-if="networkPlay"
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="giveUp"
+        >
+          认输
+        </button>
+        <!-- 新增和棋按钮 -->
+        <button
+          v-if="networkPlay"
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="offerDraw"
+        >
+          和棋
+        </button>
+        <!-- 原有的退出按钮 -->
+        <button
+          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          text="black xl"
+          hover="bg-gray-9 text-gray-2"
+          @click="quit"
+        >
+          退出
+        </button>
+      </div>
+      
+      <!-- 聊天面板 -->
+      <div class="flex-1">
+        <ChatPanel v-if="networkPlay" ref="chatPanelRef" :ws="ws" />
+      </div>
     </div>
   </div>
   <RegretModal
@@ -339,9 +287,10 @@ onUnmounted(() => {
     :on-reject="handleRegretReject"
     @close="regretModalVisible = false"
   />
-  <DrawModal
+  <RegretModal
     :visible="drawModalVisible"
     :type="drawModalType"
+    mode="draw"
     :on-accept="handleDrawAccept"
     :on-reject="handleDrawReject"
     @close="drawModalVisible = false"

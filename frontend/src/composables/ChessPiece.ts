@@ -140,26 +140,15 @@ class King extends ChessPiece {
       return false
     }
 
-    let nums = 0
-    // 检查路径上是否有棋子
-    for (let i = Math.min(this.position.y, y) + 1; i < Math.max(this.position.y, y); i++) {
-      if (board[this.position.x][i]) {
-        nums++
-      }
-    }
-    if (nums === 0) {
-      const targetPiece = board[x][y]
-      if (targetPiece && targetPiece instanceof King) {
-        return true
-      }
-    }
-
     const { upY, downY } = this.role === 'enemy' ? { upY: 0, downY: 2 } : { upY: 7, downY: 9 }
     if (y < upY || y > downY) {
       return false
     }
 
-    if ((x - this.position.x) ** 2 + (y - this.position.y) ** 2 > 2) {
+    // King can only move one step orthogonally (不能走斜线)
+    const dx = Math.abs(x - this.position.x)
+    const dy = Math.abs(y - this.position.y)
+    if (dx + dy !== 1) {
       return false
     }
 
@@ -420,34 +409,33 @@ class Cannon extends ChessPiece {
       throw new Error('Board is required for King movement validation')
     // const arr: ChessPosition[] = []
     const { x, y } = newPosition
-
     if (x !== this.position.x && y !== this.position.y) {
       return false
     }
 
-    // 检查路径上是否有棋子
-    let nums = 0
+    // 统计目标格与起点之间的棋子数（不包含起点和终点）
+    let betweenCount = 0
     if (x === this.position.x) {
       for (let i = Math.min(this.position.y, y) + 1; i < Math.max(this.position.y, y); i++) {
         if (board[this.position.x][i]) {
-          nums++
+          betweenCount++
         }
       }
-    }
-    else {
+    } else {
       for (let i = Math.min(this.position.x, x) + 1; i < Math.max(this.position.x, x); i++) {
         if (board[i][this.position.y]) {
-          nums++
+          betweenCount++
         }
       }
     }
-    const piece = board[x][y]
-    if (piece) {
-      nums++
+
+    const targetPiece = board[x][y]
+    // 目标为空时：炮只能横竖直走且中间不能有任何棋子（betweenCount === 0）
+    if (!targetPiece) {
+      return betweenCount === 0
     }
-    if (nums !== 2 && nums !== 0) {
-      return false
-    }
+    // 目标有子（吃子）时：炮必须恰好隔着一个棋子（betweenCount === 1）
+    return betweenCount === 1
 
     return true
   }

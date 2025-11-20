@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import type { WebSocketService } from '@/websocket'
-import { inject, onMounted, onUnmounted } from 'vue'
-import { showMsg } from '@/components/MessageBox'
-import router from '@/router'
+import { inject } from 'vue'
 import channel from '@/utils/channel'
 
 const ws = inject('ws') as WebSocketService
@@ -14,21 +12,6 @@ function singlePlay() {
 function onlinePlay() {
   ws?.match()
 }
-
-function handlePopState(_event: PopStateEvent) {
-  window.history.pushState(null, '', window.location.href)
-  showMsg('请通过应用内的导航按钮进行操作')
-}
-onMounted(() => {
-  window.history.pushState(null, '', window.location.href)
-  // 监听 popstate 事件，防止后退操作
-  window.addEventListener('popstate', (event) => {
-    handlePopState(event)
-  })
-})
-onUnmounted(() => {
-  window.removeEventListener('popstate', handlePopState)
-})
 </script>
 
 <template>

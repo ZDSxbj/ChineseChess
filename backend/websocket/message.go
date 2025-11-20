@@ -15,9 +15,9 @@ const (
 	messageError                      = 10
 	messageRegretRequest  MessageType = 11 // 悔棋请求
 	messageRegretResponse MessageType = 12 // 悔棋响应
-	messageChatMessage    MessageType = 15 // 聊天消息 (与前端保持一致)
 	messageDrawRequest    MessageType = 13 // 和棋请求
 	messageDrawResponse   MessageType = 14 // 和棋响应
+	messageChatMessage    MessageType = 15 // 聊天消息 (与前端保持一致)
 )
 
 type BaseMessage struct {
@@ -60,12 +60,13 @@ type RegretResponseMessage struct {
 	Accepted bool `json:"accepted"`
 }
 
+type DrawResponseMessage struct {
+	BaseMessage
+	Accepted bool `json:"accepted"`
+}
+
 type ChatMessage struct {
 	BaseMessage
 	Content string `json:"content"`
 	Sender  string `json:"sender"`
-}
-type DrawResponseMessage struct {
-	BaseMessage
-	Accepted bool `json:"accepted"`
 }
