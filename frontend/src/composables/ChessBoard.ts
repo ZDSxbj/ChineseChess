@@ -1,8 +1,5 @@
 import type { Board, ChessColor, ChessPiece, ChessPosition, ChessRole } from './ChessPiece'
-import type { GameState } from '@/store/gameStore';
-import type { WebSocketService } from '@/websocket'
 import { showMsg } from '@/components/MessageBox'
-import { saveGameState, getGameState, clearGameState } from '@/store/gameStore'
 import channel from '@/utils/channel'
 import { ChessFactory, King } from './ChessPiece'
 import Drawer from './drawer'
@@ -22,15 +19,12 @@ class ChessBoard {
   private isNetPlay: boolean = false
   private clickCallback: (event: MouseEvent) => void = () => {}
   // 新增：存储走棋历史（记录移动前的状态）
-  public moveHistory: Array<{
+  private moveHistory: Array<{
     from: ChessPosition
     to: ChessPosition
     capturedPiece: ChessPiece | null// 被吃掉的棋子（如果有）
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
   }> = []
-
-  // 新增：游戏结束状态
-  private gameEnded: boolean = false
 
   constructor(
     boardElement: HTMLCanvasElement,
@@ -69,16 +63,7 @@ class ChessBoard {
     return this.selfColor
   }
 
-  get moveHistoryList() {
-    return this.moveHistory
-  }
-
   private clickHandler(event: MouseEvent) {
-    // 新增：游戏结束后禁止走棋
-    if (this.gameEnded) {
-      return
-    }
-
     const rect = this.chessesElement.getBoundingClientRect()
     const x = Math.floor((event.clientX - rect.left) / this.gridSize)
     const y = Math.floor((event.clientY - rect.top) / this.gridSize)
@@ -116,11 +101,6 @@ class ChessBoard {
   }
 
   private move(from: ChessPosition, to: ChessPosition) {
-    // 新增：游戏结束后禁止走棋
-    if (this.gameEnded) {
-      return
-    }
-
     const piece = this.board[from.x][from.y]
     const targetPiece = this.board[to.x][to.y]
     if (!piece) {
@@ -137,28 +117,66 @@ class ChessBoard {
       capturedPiece: targetPiece || null,
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
     })
+
+    // 先在数据结构上应用移动（模拟新的棋盘状态），再绘制
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
     piece.move(to)
+
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
     }
+
+    // 如果直接吃掉对方的将，立即判定结束（移动方胜）
     if (targetPiece) {
       if (targetPiece instanceof King) {
-        const winner = this.currentRole === 'self' ? this.selfColor : targetPiece.color
-        channel.emit('GAME:END', { winner, isResign: false })
-        this.end(winner)
+        const moverColor = piece.color
+        channel.emit('GAME:END', { winner: moverColor })
+        this.end(moverColor)
+        return
       }
     }
-    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
-    delete this.board[from.x][from.y]
-    this.board[to.x][to.y] = piece
-    saveGameState({
-      isNetPlay: this.isNetPlay,
-      selfColor: this.selfColor,
-      moveHistory: this.moveHistory,
-      currentRole: this.currentRole,
-    })
 
+    // 检查将帅是否相对（同一列且中间无棋子）——若相对则移动方胜
+    try {
+      const kings: { x: number; y: number; piece: ChessPiece }[] = []
+      for (let xi = 0; xi <= 8; xi++) {
+        for (let yi = 0; yi <= 9; yi++) {
+          const p = this.board[xi][yi]
+          if (p && p instanceof King) {
+            kings.push({ x: xi, y: yi, piece: p })
+          }
+        }
+      }
+      if (kings.length === 2) {
+        const k1 = kings[0]
+        const k2 = kings[1]
+        if (k1.x === k2.x) {
+          let blocked = false
+          for (let yi = Math.min(k1.y, k2.y) + 1; yi < Math.max(k1.y, k2.y); yi++) {
+            if (this.board[k1.x][yi]) {
+              blocked = true
+              break
+            }
+          }
+          if (!blocked) {
+            // 将帅相对时，移动方落败，对方胜
+            const opponentColor = piece.color === 'red' ? 'black' : 'red'
+            channel.emit('GAME:END', { winner: opponentColor })
+            this.end(opponentColor)
+            return
+          }
+        }
+      }
+    }
+    catch (e) {
+      // 安全容错，不阻塞游戏流程
+      console.error('face-to-face check error', e)
+    }
+
+    // 切换回合
+    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     // showMsg(`现在是${this.currentRole}的回合`)
   }
 
@@ -180,39 +198,7 @@ class ChessBoard {
     }
     this.drawChesses()
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
-    saveGameState({
-      isNetPlay: this.isNetPlay,
-      selfColor: this.selfColor,
-      moveHistory: this.moveHistory,
-      currentRole: this.currentRole,
-    })
     return true
-  }
-
-  public restoreState(savedState: GameState): void {
-    // 恢复基础配置（覆盖初始设置）
-    this.start(savedState.selfColor, savedState.isNetPlay)
-
-    // 恢复历史记录和当前回合
-    this.moveHistory = savedState.moveHistory // 注意：这里直接赋值私有属性，或通过setter
-    this.currentRole = savedState.currentRole
-
-    // 重新应用历史记录到棋盘
-    this.clear() // 清空当前棋盘
-    this.initChesses() // 重新初始化棋子
-
-    // 遍历历史步骤，还原每一步移动
-    savedState.moveHistory.forEach((step) => {
-      const piece = this.board[step.from.x][step.from.y]
-      if (piece) {
-        piece.move(step.to)
-        delete this.board[step.from.x][step.from.y]
-        this.board[step.to.x][step.to.y] = piece
-      }
-    })
-
-    this.drawChesses()
-    this.drawBoard()
   }
 
   // 判断是否是自己的回合
@@ -232,10 +218,11 @@ class ChessBoard {
 
   private end(winner: string) {
     this.chessesElement.removeEventListener('click', this.clickCallback)
-    // 判断当前玩家是胜利还是失败
-    const result = winner === this.selfColor ? 'win' : 'lose'
-    this.endGame(result) // 调用统一结束方法
-    showMsg(`${winner === 'red' ? '红' : '黑'}方胜利，游戏结束！`)
+  }
+
+  // 公有方法：禁用用户交互（用于网络结束时保留棋盘但禁止继续操作）
+  public disableInteraction() {
+    this.chessesElement.removeEventListener('click', this.clickCallback)
   }
 
   private selectPiece(piece: ChessPiece) {
@@ -261,7 +248,6 @@ class ChessBoard {
     this.isNetPlay = isNet
     this.selfColor = color
     this.currentRole = color === 'red' ? 'self' : 'enemy'
-    this.gameEnded = false // 重置游戏状态
     this.board = Array.from({ length: 9 }).fill(null).map(() => {
       return {}
     })
@@ -713,30 +699,6 @@ class ChessBoard {
         targetY + markerSize * 2,
       )
     }
-  }
-
-  // 新增：结束游戏，禁用所有操作
-  public endGame(result: 'win' | 'lose' | 'draw' = 'draw') {
-    this.gameEnded = true
-    // 取消棋子选择
-    this.selectedPiece?.deselect()
-    this.selectedPiece = null
-    // 移除点击事件监听
-    this.chessesElement.removeEventListener('click', this.clickCallback)
-
-    // 根据结果显示不同消息
-    const message = {
-      win: '恭喜，你胜利了！',
-      lose: '很遗憾，你失败了！',
-      draw: '游戏结束，双方和棋！',
-    }[result]
-
-    showMsg(message)
-  }
-
-  // 新增：获取游戏状态
-  public isGameEnded(): boolean {
-    return this.gameEnded
   }
 }
 

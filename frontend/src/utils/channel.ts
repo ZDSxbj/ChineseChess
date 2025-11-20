@@ -6,14 +6,17 @@ interface GameEvents {
     color: color
   }
   'GAME:END': {
-    winner: color | null  // 允许 null（用于和棋场景）
-    isResign: boolean 
+    winner: color
   }
   'NET:GAME:START': {
     color: color
   }
   'NET:GAME:END': {
     winner: color
+  }
+  'NET:DRAW:REQUEST': Record<string, never>
+  'NET:DRAW:RESPONSE': {
+    accepted: boolean
   }
   'NET:CHESS:MOVE': {
     from: position
@@ -32,13 +35,6 @@ interface GameEvents {
     sender: string
     content: string
   }
-
-  // 和棋相关事件
-  'NET:CHESS:DRAW:REQUEST': Record<string, never>
-  'NET:CHESS:DRAW:RESPONSE': {
-    accepted: boolean
-  }
-  'NET:CHESS:DRAW:SUCCESS': Record<string, never>
 }
 
 type Listener<T> = (req: T) => void
