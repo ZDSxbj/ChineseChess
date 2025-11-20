@@ -2,17 +2,10 @@ import type { Board, ChessColor, ChessPiece, ChessPosition, ChessRole } from './
 import type { GameState } from '@/store/gameStore';
 import type { WebSocketService } from '@/websocket'
 import { showMsg } from '@/components/MessageBox'
-import { saveGameState, getGameState, clearGameState  } from '@/store/gameStore'
+import { saveGameState, getGameState, clearGameState } from '@/store/gameStore'
 import channel from '@/utils/channel'
 import { ChessFactory, King } from './ChessPiece'
 import Drawer from './drawer'
-
-// 声明 window 对象上有 ws 属性
-declare global {
-  interface Window {
-    ws: WebSocketService
-  }
-}
 
 class ChessBoard {
   private board: Board

@@ -95,8 +95,6 @@ function giveUp() {
 function quit() {
   giveUp()
   clearGameState() // 退出时清除状态
-  const currentState = history.state
-  window.history.pushState(currentState, '', window.location.href)
   router.push('/')
 }
 // 新增悔棋函数
@@ -126,15 +124,6 @@ function regret() {
   }
 }
 
-// 处理回退事件
-function handlePopState(_event: PopStateEvent) {
-  // 阻止回退
-  const currentState = history.state
-  window.history.pushState(currentState, '', window.location.href)
-  // 提示用户，防止意外退出
-  showMsg('请通过游戏内的退出按钮退出游戏')
-}
-
 // 新增：和棋函数
 function draw() {
   if (gameEnded.value)
@@ -155,6 +144,10 @@ function draw() {
   }
 }
 
+function handlePopState(_event: PopStateEvent) {
+  window.history.pushState(null, '', window.location.href)
+  showMsg('请通过应用内的导航按钮进行操作')
+}
 onMounted(() => {
   const gridSize = decideSize(isPC.value)
   const canvasBackground = background.value as HTMLCanvasElement
@@ -239,9 +232,7 @@ onMounted(() => {
       showMsg('对方拒绝悔棋')
     }
   })
-  window.history.pushState(null, '', window.location.href) // 修改浏览器历史记录
-  window.addEventListener('popstate', handlePopState)
-  // 监听和棋请求
+
   channel.on('NET:CHESS:DRAW:REQUEST', () => {
     drawModalType.value = 'responding'
     drawModalVisible.value = true
@@ -261,10 +252,14 @@ onMounted(() => {
       showMsg('对方拒绝和棋')
     }
   })
+  window.history.pushState(null, '', window.location.href)
+  // 监听 popstate 事件，防止后退操作
+  window.addEventListener('popstate', (event) => {
+    handlePopState(event)
+  })
 })
 
 onUnmounted(() => {
-  window.removeEventListener('popstate', handlePopState)
   channel.off('NET:GAME:START')
   channel.off('GAME:END')
   channel.off('NET:GAME:END')
@@ -273,6 +268,7 @@ onUnmounted(() => {
   channel.off('NET:CHESS:REGRET:RESPONSE')
   channel.off('NET:CHESS:DRAW:REQUEST') // 新增：取消和棋请求监听
   channel.off('NET:CHESS:DRAW:RESPONSE') // 新增：取消和棋响应监听
+  window.removeEventListener('popstate', handlePopState)
   chessBoard?.stop()
 })
 </script>
