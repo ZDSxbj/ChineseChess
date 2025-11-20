@@ -3,7 +3,6 @@ import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted } from 'vue'
 import { showMsg } from '@/components/MessageBox'
 import router from '@/router'
-import { inject } from 'vue'
 import channel from '@/utils/channel'
 
 const ws = inject('ws') as WebSocketService

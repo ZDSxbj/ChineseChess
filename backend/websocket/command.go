@@ -15,9 +15,9 @@ const (
 	commandHeartbeat                             // 心跳
 	commandRegretRequest  CommendType = 13       // 悔棋请求命令
 	commandRegretResponse CommendType = 14       // 悔棋响应命令
-	commandChatMessage    CommendType = 15       // 聊天消息命令
-	commandDrawRequest    CommendType = 16       // 和棋请求命令
-	commandDrawResponse   CommendType = 17       // 和棋响应命令
+	commandChatMessage    CommendType = 17       // 聊天消息命令
+	commandDrawRequest    CommendType = 15       // 和棋请求命令
+	commandDrawResponse   CommendType = 16       // 和棋响应命令
 )
 
 type moveRequest struct {
@@ -47,13 +47,12 @@ type regretResponsePayload struct {
 	accepted bool    // 是否同意悔棋
 }
 
-// 和棋请求 payload
 type drawRequestPayload struct {
-	from *Client
+	from *Client // 发起和棋的客户端
 }
 
-// 和棋响应 payload
+// 新增：和棋响应 payload 结构
 type drawResponsePayload struct {
-	from     *Client
-	accepted bool
+	from     *Client // 响应和棋的客户端
+	accepted bool    // 是否同意和棋
 }

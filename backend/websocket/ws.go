@@ -16,12 +16,24 @@ import (
 
 	"chinese-chess-backend/database"
 	"chinese-chess-backend/dto"
-	"chinese-chess-backend/dto/room"
-	dtouser "chinese-chess-backend/dto/user"
+
+	// dtouser "chinese-chess-backend/dto/user"
 	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/utils"
 	"slices"
 )
+
+type RoomInfo struct {
+	Id      int      `json:"id"`
+	Current UserInfo `json:"current"`
+	Next    UserInfo `json:"next"`
+}
+
+type UserInfo struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+	Exp  int    `json:"exp"`
+}
 
 const (
 	HeartbeatInterval = 5 * time.Second  // 发送心跳的间隔
@@ -41,7 +53,7 @@ type ChessHub struct {
 	Rooms      map[int](*ChessRoom)
 	Clients    map[int]*Client
 	commands   chan hubCommand
-	spareRooms []room.RoomInfo // 有空位的房间id
+	spareRooms []RoomInfo // 有空位的房间id
 	mu         sync.Mutex
 	pool       *utils.WorkerPool
 	matchPool  [](*Client)
@@ -53,7 +65,7 @@ func NewChessHub() *ChessHub {
 		Rooms:      make(map[int](*ChessRoom)),
 		Clients:    make(map[int]*Client),
 		commands:   make(chan hubCommand),
-		spareRooms: make([]room.RoomInfo, 0),
+		spareRooms: make([]RoomInfo, 0),
 		mu:         sync.Mutex{},
 		pool:       pool,
 	}
@@ -221,25 +233,24 @@ func (ch *ChessHub) Run() {
 
 				room := ch.Rooms[cmd.client.RoomId]
 				if room == nil {
-					// 房间不存在：仍然尝试告知当前客户端比赛结束并返回胜者信息（避免显示“房间不存在”）
-					if cmd.payload == nil {
-						winner = cmd.client.Role
-					} else {
-						// payload 已经是客户端传来的 winner（clientRole），直接使用
-						winner = cmd.payload.(clientRole)
-					}
-					endMsg := endMessage{
-						BaseMessage: BaseMessage{Type: messageEnd},
-						Winner:      winner,
-					}
-					cmd.client.sendMessage(endMsg)
+					cmd.client.sendMessage(NormalMessage{
+						BaseMessage: BaseMessage{Type: messageNormal},
+						Message:     "房间不存在",
+					})
 					return nil
 				}
 				if cmd.payload == nil {
 					winner = cmd.client.Role
 				} else {
-					// payload 已经是客户端传来的 winner（clientRole），直接使用
-					winner = cmd.payload.(clientRole)
+					r := cmd.payload.(clientRole)
+					if r != roleNone {
+						if r == roleRed {
+							r = roleBlack
+						} else {
+							r = roleRed
+						}
+					}
+					winner = r
 				}
 				// 发送消息给两个客户端，通知他们结束游戏
 				endMsg := endMessage{
@@ -289,10 +300,12 @@ func (ch *ChessHub) Run() {
 				r := NewChessRoom()
 				r.join(client)
 				ch.Rooms[r.Id] = r
-				roomInfo := room.RoomInfo{
+				roomInfo := RoomInfo{
 					Id: client.RoomId,
-					Current: dtouser.UserInfo{
-						ID: uint(client.Id),
+					Current: UserInfo{
+						ID:   uint(client.Id),
+						Name: client.Username,
+						Exp:  0,
 					},
 				}
 				ch.mu.Lock()
@@ -301,6 +314,7 @@ func (ch *ChessHub) Run() {
 				// 发送消息给客户端，通知他们创建房间成功
 				ch.sendMessage(client, NormalMessage{
 					BaseMessage: BaseMessage{Type: messageCreate},
+					Message:     fmt.Sprintf("%d", r.Id),  // 消息内容携带房间ID
 				})
 				return nil
 			// 新增：处理悔棋请求命令
@@ -315,15 +329,6 @@ func (ch *ChessHub) Run() {
 				client := payload.from
 				ch.handleRegretResponse(client, payload.accepted)
 
-			case commandDrawRequest:
-				payload := cmd.payload.(drawRequestPayload)
-				client := payload.from
-				ch.handleDrawRequest(client)
-
-			case commandDrawResponse:
-				payload := cmd.payload.(drawResponsePayload)
-				client := payload.from
-				ch.handleDrawResponse(client, payload.accepted)
 			case commandChatMessage:
 				client := cmd.client
 				chatMsg := cmd.payload.(*ChatMessage)
@@ -343,6 +348,18 @@ func (ch *ChessHub) Run() {
 				if target != nil {
 					target.sendMessage(chatMsg)
 				}
+
+			// 新增：处理和棋请求命令
+			case commandDrawRequest:
+				payload := cmd.payload.(drawRequestPayload)
+				client := payload.from
+				ch.handleDrawRequest(client)
+
+			// 新增：处理和棋响应命令
+			case commandDrawResponse:
+				payload := cmd.payload.(drawResponsePayload)
+				client := payload.from
+				ch.handleDrawResponse(client, payload.accepted)
 			}
 			return nil
 		})
@@ -452,8 +469,13 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 		return fmt.Errorf("解析消息失败: %v", err)
 	}
 
+	// 添加详细日志
+	fmt.Printf("🔍 收到消息 - 类型: %d, 用户ID: %d, 房间ID: %d, 状态: %d\n",
+		base.Type, client.Id, client.RoomId, client.Status)
+
 	switch base.Type {
 	case messageMatch:
+		fmt.Printf("🎯 处理匹配消息，用户状态: %d\n", client.Status)
 		switch client.Status {
 		case userOnline:
 			client.Status = userMatching
@@ -496,19 +518,9 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 		}
 	case messageEnd:
 		if client.Status == userPlaying {
-			// 尝试解析消息体中的 winner 字段（可选）并作为 payload 传递到命令队列
-			var em endMessage
-			if err := json.Unmarshal(rawMessage, &em); err == nil {
-				ch.commands <- hubCommand{
-					commandType: commandEnd,
-					client:      client,
-					payload:     em.Winner,
-				}
-			} else {
-				ch.commands <- hubCommand{
-					commandType: commandEnd,
-					client:      client,
-				}
+			ch.commands <- hubCommand{
+				commandType: commandEnd,
+				client:      client,
 			}
 		}
 	case messageJoin:
@@ -550,19 +562,10 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 		}
 	case messageGiveUp:
 		if client.Status == userPlaying {
-			// 将认输请求转换为结束命令，payload 传递为对手角色（认输方的对手为胜者）
-			var winner clientRole
-			if client.Role == roleRed {
-				winner = roleBlack
-			} else if client.Role == roleBlack {
-				winner = roleRed
-			} else {
-				winner = roleNone
-			}
 			ch.commands <- hubCommand{
 				commandType: commandEnd,
 				client:      client,
-				payload:     winner,
+				payload:     client.Role,
 			}
 		}
 	// 新增：处理悔棋请求
@@ -603,6 +606,7 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				accepted: resp.Accepted,
 			},
 		}
+
 	case messageChatMessage:
 		if client.Status != userPlaying || client.RoomId == -1 {
 			return client.sendMessage(NormalMessage{
@@ -625,6 +629,7 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 			},
 		}
 
+	// 新增：处理和棋请求
 	case messageDrawRequest:
 		if client.Status != userPlaying || client.RoomId == -1 {
 			return client.sendMessage(NormalMessage{
@@ -632,12 +637,16 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				Message:     "不在游戏中，无法请求和棋",
 			})
 		}
+		// 发送内部命令到命令队列
 		ch.commands <- hubCommand{
 			commandType: commandDrawRequest,
 			client:      client,
-			payload:     drawRequestPayload{from: client},
+			payload: drawRequestPayload{
+				from: client,
+			},
 		}
 
+	// 新增：处理前端和棋响应消息，转为内部命令
 	case messageDrawResponse:
 		if client.Status != userPlaying || client.RoomId == -1 {
 			return client.sendMessage(NormalMessage{
@@ -649,6 +658,7 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 		if err := json.Unmarshal(rawMessage, &resp); err != nil {
 			return fmt.Errorf("解析和棋响应失败: %v", err)
 		}
+		// 发送内部命令到命令队列
 		ch.commands <- hubCommand{
 			commandType: commandDrawResponse,
 			client:      client,
@@ -661,18 +671,9 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 	return nil
 }
 
-func (ch *ChessHub) sendMessage(client *Client, message any) {
-	ch.commands <- hubCommand{
-		commandType: commandSendMessage,
-		payload: sendMessageRequest{
-			target:  client,
-			message: message,
-		},
-	}
-}
-
-// 新增：处理悔棋请求（转发给对手）
-func (ch *ChessHub) handleRegretRequest(requester *Client) {
+// 新增：处理和棋请求（转发给对手）
+func (ch *ChessHub) handleDrawRequest(requester *Client) {
+	fmt.Printf("🚀 进入 handleDrawRequest，用户: %d, 房间: %s\n", requester.Id, requester.RoomId)
 	ch.mu.Lock()
 	room, ok := ch.Rooms[requester.RoomId]
 	ch.mu.Unlock()
@@ -698,104 +699,16 @@ func (ch *ChessHub) handleRegretRequest(requester *Client) {
 		})
 		return
 	}
-
-	// 向对手发送悔棋请求
-	opponent.sendMessage(NormalMessage{
-		BaseMessage: BaseMessage{Type: messageRegretRequest},
-		Message:     "对方请求悔棋",
-	})
-}
-
-// 新增：处理悔棋响应（同步双方状态）
-func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
-	ch.mu.Lock()
-	room, ok := ch.Rooms[responder.RoomId]
-	ch.mu.Unlock()
-	if !ok {
-		responder.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "房间不存在",
-		})
-		return
-	}
-
-	// 确定悔棋请求发起方
-	var requester *Client
-	if room.Current == responder {
-		requester = room.Next
-	} else {
-		requester = room.Current
-	}
-	if requester == nil {
-		responder.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "请求方不存在",
-		})
-		return
-	}
-
-	if accepted {
-		// 同意悔棋：同步双方执行悔棋，更新房间历史记录
-		room.mu.Lock()
-		if len(room.History) > 0 {
-			room.History = room.History[:len(room.History)-1] // 移除最后一步,这个有争议，需要后续修改
-		}
-		room.mu.Unlock()
-
-		// 通知请求方执行悔棋
-		respMsg := RegretResponseMessage{
-			BaseMessage: BaseMessage{Type: messageRegretResponse},
-			Accepted:    true,
-		}
-		requester.sendMessage(respMsg)
-		if room.Current == responder {
-			room.Current = requester
-			room.Next = responder
-		}
-	} else {
-		// 拒绝悔棋：仅通知请求方
-		requester.sendMessage(RegretResponseMessage{
-			BaseMessage: BaseMessage{Type: messageRegretResponse},
-			Accepted:    false,
-		})
-	}
-}
-
-// 新增：处理和棋请求（转发给对手）
-func (ch *ChessHub) handleDrawRequest(requester *Client) {
-	ch.mu.Lock()
-	room, ok := ch.Rooms[requester.RoomId]
-	ch.mu.Unlock()
-	if !ok {
-		requester.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "房间不存在",
-		})
-		return
-	}
-
-	var opponent *Client
-	if room.Current == requester {
-		opponent = room.Next
-	} else {
-		opponent = room.Current
-	}
-	if opponent == nil {
-		requester.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "对手不存在",
-		})
-		return
-	}
-
-	// 向对手发送和棋请求（使用 NormalMessage 携带类型）
+	fmt.Printf("📤 准备向对手发送和棋请求，对手ID: %d\n", opponent.Id)
+	// 向对手发送和棋请求
 	opponent.sendMessage(NormalMessage{
 		BaseMessage: BaseMessage{Type: messageDrawRequest},
 		Message:     "对方请求和棋",
 	})
+	fmt.Printf("✅ 和棋请求发送完成\n")
 }
 
-// 新增：处理和棋响应（若同意则结束为和棋）
+// 新增：处理和棋响应（同步双方状态）
 func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
 	ch.mu.Lock()
 	room, ok := ch.Rooms[responder.RoomId]
@@ -808,7 +721,7 @@ func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
 		return
 	}
 
-	// 确定请求方
+	// 确定和棋请求发起方
 	var requester *Client
 	if room.Current == responder {
 		requester = room.Next
@@ -823,24 +736,28 @@ func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
 		return
 	}
 
-	// 通知请求方和棋响应
-	respMsg := DrawResponseMessage{
-		BaseMessage: BaseMessage{Type: messageDrawResponse},
-		Accepted:    accepted,
-	}
-	requester.sendMessage(respMsg)
-
 	if accepted {
-		// 若同意，发送结束消息（和棋, winner = roleNone）给双方并清理房间
-		endMsg := endMessage{
-			BaseMessage: BaseMessage{Type: messageEnd},
-			Winner:      roleNone,
+		// 同意和棋：通知双方和棋成功
+		drawMsg := DrawResponseMessage{
+			BaseMessage: BaseMessage{Type: messageDrawResponse},
+			Accepted:    true,
+			// Message:     "对方同意和棋，游戏结束",
 		}
-		room.Current.sendMessage(endMsg)
-		room.Next.sendMessage(endMsg)
-		room.clear()
-		ch.mu.Lock()
-		delete(ch.Rooms, requester.RoomId)
-		ch.mu.Unlock()
+
+		requester.sendMessage(drawMsg)
+
+		// 同时发送游戏结束命令
+		ch.commands <- hubCommand{
+			commandType: commandEnd,
+			client:      responder,
+			payload:     roleNone, // 和棋没有胜者
+		}
+	} else {
+		// 拒绝和棋：仅通知请求方
+		requester.sendMessage(DrawResponseMessage{
+			BaseMessage: BaseMessage{Type: messageDrawResponse},
+			Accepted:    false,
+			// Message:     "对方拒绝和棋",
+		})
 	}
 }

@@ -48,14 +48,14 @@ watch(
       // 显示时根据 type 初始化
       if (newType === 'requesting') {
         title.value = '等待回应'
-        message.value = '对方正在考虑是否同意悔棋'
+        message.value = '对方正在考虑是否同意和棋'
         showCountdown.value = false
         showButtons.value = false
         clearTimer() // 请求方不需要倒计时
       }
       else {
-        title.value = '悔棋请求'
-        message.value = '对方请求悔棋，是否同意？'
+        title.value = '和棋请求'
+        message.value = '对方请求和棋，是否同意？'
         showCountdown.value = true
         showButtons.value = true
         autoAction.value = '拒绝'
@@ -70,14 +70,14 @@ watch(
   { immediate: true }, // 初始化时立即执行
 )
 
-// 同意悔棋
+// 同意和棋
 function handleAccept() {
   clearTimer()
   props.onAccept?.()
   emit('close')
 }
 
-// 拒绝悔棋
+// 拒绝和棋
 function handleReject() {
   clearTimer()
   props.onReject?.()
@@ -95,13 +95,13 @@ function handleReject() {
       <p v-else class="mb-4">{{ message }}</p>
       <div v-if="showButtons" class="flex justify-around">
         <button
-          class="rounded bg-green-500 px-4 py-2 text-white"
+          class="rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600 transition-colors"
           @click="handleAccept"
         >
           同意
         </button>
         <button
-          class="rounded bg-red-500 px-4 py-2 text-white"
+          class="rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600 transition-colors"
           @click="handleReject"
         >
           拒绝
