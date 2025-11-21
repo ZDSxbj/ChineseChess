@@ -3,11 +3,12 @@ import type { Ref } from 'vue'
 import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import ChatPanel from '@/components/ChatPanel.vue'
 import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
+import { clearGameState, getGameState, saveGameState } from '@/store/gameStore'
 import channel from '@/utils/channel'
-import ChatPanel from '@/components/ChatPanel.vue'
 
 const router = useRouter()
 const chatPanelRef = ref()
@@ -29,8 +30,8 @@ const drawModalType = ref<'requesting' | 'responding'>('requesting')
 
 function handleRegretAccept() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   ws.sendRegretResponse(true)
   const steps = chessBoard.isMyTurn() ? 1 : 2
@@ -44,8 +45,8 @@ function handleRegretAccept() {
 
 function handleRegretReject() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   ws.sendRegretResponse(false)
   regretModalVisible.value = false
@@ -53,8 +54,8 @@ function handleRegretReject() {
 
 function handleDrawAccept() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   ws.sendDrawResponse(true)
   // 接受和棋，后端会广播 GAME:END
@@ -63,8 +64,8 @@ function handleDrawAccept() {
 
 function handleDrawReject() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   ws.sendDrawResponse(false)
   drawModalVisible.value = false
@@ -82,16 +83,16 @@ watch(isPC, (newIsPC) => {
 
 function giveUp() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   ws?.giveUp()
 }
 
 function offerDraw() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   ws.sendDrawRequest()
   drawModalType.value = 'requesting'
@@ -103,13 +104,14 @@ function quit() {
   if (!gameOver.value) {
     giveUp()
   }
+  clearGameState() // 退出时清除状态
   router.push('/')
 }
 // 新增悔棋函数
 function regret() {
   if (gameOver.value) {
-    showMsg('游戏已结束');
-    return;
+    showMsg('游戏已结束')
+    return
   }
   if (chessBoard) {
     if (!chessBoard.stepsNum) {
@@ -129,6 +131,12 @@ function regret() {
     }
   }
 }
+
+function handlePopState(_event: PopStateEvent) {
+  window.history.pushState(null, '', window.location.href)
+  showMsg('请通过应用内的导航按钮进行操作')
+}
+
 onMounted(() => {
   const gridSize = decideSize(isPC.value)
   const canvasBackground = background.value as HTMLCanvasElement
@@ -144,11 +152,25 @@ onMounted(() => {
   chessBoard.start('red', false)
   networkPlay.value = false
   console.log('ChessBoard started')
+  // 尝试加载保存的游戏状态
+  const savedState = getGameState()
+  if (savedState) {
+    chessBoard.restoreState(savedState)
+    console.log('Game state restored from localStorage')
+  }
   channel.on('NET:GAME:START', ({ color }) => {
     console.log('Game started, color:', color)
     chessBoard.stop()
     chessBoard.start(color, true)
     networkPlay.value = true
+    // 新增：保存初始游戏状态
+    saveGameState({
+      isNetPlay: chessBoard.isNetworkPlay(),
+      roomId: ws.getCurrentRoomId(), // 需确保ws实例有currentRoomId属性（后续步骤补充）
+      selfColor: color,
+      moveHistory: chessBoard.moveHistoryList, // 初始为空
+      currentRole: chessBoard.currentRole,
+    })
   })
 
   // 监听聊天消息
@@ -159,7 +181,8 @@ onMounted(() => {
   })
   // 监听和棋请求
   channel.on('NET:DRAW:REQUEST', () => {
-    if (gameOver.value) return
+    if (gameOver.value)
+      return
     // 展示与悔棋一致的模态交互
     drawModalType.value = 'responding'
     drawModalVisible.value = true
@@ -173,21 +196,24 @@ onMounted(() => {
       showMsg('对方同意和棋，局面以和棋结束')
       gameOver.value = true
       chessBoard?.disableInteraction()
-    } else {
+    }
+    else {
       showMsg('对方拒绝了和棋请求')
     }
   })
-    channel.on('NET:GAME:END', ({ winner }) => {
-      gameOver.value = true;
-      if (winner === 'red') {
-        showMsg('红方胜利');
-      } else if (winner === 'black') {
-        showMsg('黑方胜利');
-      } else {
-        showMsg('和棋');
-      }
-      chessBoard?.disableInteraction()
-    });
+  channel.on('NET:GAME:END', ({ winner }) => {
+    gameOver.value = true
+    if (winner === 'red') {
+      showMsg('红方胜利')
+    }
+    else if (winner === 'black') {
+      showMsg('黑方胜利')
+    }
+    else {
+      showMsg('和棋')
+    }
+    chessBoard?.disableInteraction()
+  })
   // 监听悔棋请求
   channel.on('NET:CHESS:REGRET:REQUEST', () => {
     regretModalType.value = 'responding'
@@ -211,6 +237,11 @@ onMounted(() => {
       showMsg('对方拒绝悔棋')
     }
   })
+  window.history.pushState(null, '', window.location.href)
+  // 监听 popstate 事件，防止后退操作
+  window.addEventListener('popstate', (event) => {
+    handlePopState(event)
+  })
 })
 onUnmounted(() => {
   channel.off('NET:GAME:START')
@@ -218,6 +249,7 @@ onUnmounted(() => {
   channel.off('NET:CHESS:REGRET:RESPONSE')
   channel.off('NET:DRAW:REQUEST')
   channel.off('NET:DRAW:RESPONSE')
+  window.removeEventListener('popstate', handlePopState)
   chessBoard?.stop()
 })
 </script>
@@ -273,7 +305,7 @@ onUnmounted(() => {
           退出
         </button>
       </div>
-      
+
       <!-- 聊天面板 -->
       <div class="flex-1">
         <ChatPanel v-if="networkPlay" ref="chatPanelRef" :ws="ws" />

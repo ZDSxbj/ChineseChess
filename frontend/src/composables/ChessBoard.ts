@@ -1,5 +1,7 @@
 import type { Board, ChessColor, ChessPiece, ChessPosition, ChessRole } from './ChessPiece'
+import type { GameState } from '@/store/gameStore';
 import { showMsg } from '@/components/MessageBox'
+import { saveGameState, getGameState, clearGameState } from '@/store/gameStore'
 import channel from '@/utils/channel'
 import { ChessFactory, King } from './ChessPiece'
 import Drawer from './drawer'
@@ -63,6 +65,10 @@ class ChessBoard {
     return this.selfColor
   }
 
+  get moveHistoryList() {
+    return this.moveHistory
+  }
+
   private clickHandler(event: MouseEvent) {
     const rect = this.chessesElement.getBoundingClientRect()
     const x = Math.floor((event.clientX - rect.left) / this.gridSize)
@@ -122,7 +128,12 @@ class ChessBoard {
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
     piece.move(to)
-
+    saveGameState({
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    })
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
@@ -140,7 +151,7 @@ class ChessBoard {
 
     // 检查将帅是否相对（同一列且中间无棋子）——若相对则移动方胜
     try {
-      const kings: { x: number; y: number; piece: ChessPiece }[] = []
+      const kings: { x: number, y: number, piece: ChessPiece }[] = []
       for (let xi = 0; xi <= 8; xi++) {
         for (let yi = 0; yi <= 9; yi++) {
           const p = this.board[xi][yi]
@@ -198,7 +209,40 @@ class ChessBoard {
     }
     this.drawChesses()
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    saveGameState({
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    })
     return true
+  }
+
+  // 新增：恢复游戏状态的方法
+  public restoreState(savedState: GameState): void {
+    // 恢复基础配置（覆盖初始设置）
+    this.start(savedState.selfColor, savedState.isNetPlay)
+
+    // 恢复历史记录和当前回合
+    this.moveHistory = savedState.moveHistory // 注意：这里直接赋值私有属性，或通过setter
+    this.currentRole = savedState.currentRole
+
+    // 重新应用历史记录到棋盘
+    this.clear() // 清空当前棋盘
+    this.initChesses() // 重新初始化棋子
+
+    // 遍历历史步骤，还原每一步移动
+    savedState.moveHistory.forEach((step) => {
+      const piece = this.board[step.from.x][step.from.y]
+      if (piece) {
+        piece.move(step.to)
+        delete this.board[step.from.x][step.from.y]
+        this.board[step.to.x][step.to.y] = piece
+      }
+    })
+
+    this.drawChesses()
+    this.drawBoard()
   }
 
   // 判断是否是自己的回合

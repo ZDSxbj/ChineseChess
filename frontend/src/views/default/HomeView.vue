@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { WebSocketService } from '@/websocket'
-import { inject } from 'vue'
+import { inject, onMounted, onUnmounted } from 'vue'
 import channel from '@/utils/channel'
 
 const ws = inject('ws') as WebSocketService
@@ -12,6 +12,19 @@ function singlePlay() {
 function onlinePlay() {
   ws?.match()
 }
+function handlePopState(_event: PopStateEvent) {
+  window.history.pushState(null, '', window.location.href)
+}
+onMounted(() => {
+  window.history.pushState(null, '', window.location.href)
+  // 监听 popstate 事件，防止后退操作
+  window.addEventListener('popstate', (event) => {
+    handlePopState(event)
+  })
+})
+onUnmounted(() => {
+  window.removeEventListener('popstate', handlePopState)
+})
 </script>
 
 <template>

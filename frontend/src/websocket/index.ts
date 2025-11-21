@@ -30,8 +30,8 @@ interface WebSocketMessage {
   winner?: 0 | 1 | 2
   roomId?: number
   accepted?: boolean // 用于悔棋响应的布尔值字段
-  content?: string  // 聊天消息内容
-  sender?: string   // 聊天消息发送者
+  content?: string // 聊天消息内容
+  sender?: string // 聊天消息发送者
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -59,13 +59,14 @@ export interface WebSocketService {
   sendChatMessage: (content: string) => void // 新增发送聊天消息方法
   sendDrawRequest: () => void
   sendDrawResponse: (accepted: boolean) => void
+  getCurrentRoomId: () => number | undefined // 新增获取当前房间ID方法
 }
 
 export function useWebSocket(): WebSocketService {
   const socket = ref<WebSocket | null>(null)
   let lastUrl: string | null = null
   const pendingMessages: WebSocketMessage[] = []
-
+  const currentRoomId = ref<number | undefined>(undefined) // 新增：记录当前房间ID
   let resolve: (value?: unknown) => void
   // let reject: (reason?: unknown) => void
 
@@ -108,9 +109,12 @@ export function useWebSocket(): WebSocketService {
         }
         // 把后端的数值映射为应用内事件（'red'|'black'|'draw'）并通知 UI 层
         let w: string | undefined
-        if (winner === 0) w = 'draw'
-        else if (winner === 1) w = 'red'
-        else if (winner === 2) w = 'black'
+        if (winner === 0)
+          w = 'draw'
+        else if (winner === 1)
+          w = 'red'
+        else if (winner === 2)
+          w = 'black'
         if (w) {
           channel.emit('NET:GAME:END', { winner: w })
         }
@@ -129,10 +133,10 @@ export function useWebSocket(): WebSocketService {
         // 收到悔悔棋请求给UI
         channel.emit('NET:CHESS:REGRET:REQUEST', {})
         break
-        case MessageType.DrawRequest:
-          // 收到和棋请求，通知 UI
-          channel.emit('NET:DRAW:REQUEST', {})
-          break
+      case MessageType.DrawRequest:
+        // 收到和棋请求，通知 UI
+        channel.emit('NET:DRAW:REQUEST', {})
+        break
       case MessageType.RegretResponse: {
         // 处理悔棋响应
         const accepted = data.accepted
@@ -170,12 +174,15 @@ export function useWebSocket(): WebSocketService {
     if (lastUrl) {
       pendingMessages.push(message)
       try {
+        // eslint-disable-next-line ts/no-use-before-define
         connect(lastUrl)
-      } catch (e) {
+      }
+      catch (e) {
         console.error('Reconnect failed', e)
         showMsg('重连失败，请检查网络或刷新页面')
       }
-    } else {
+    }
+    else {
       showMsg('WebSocket 未连接，无法发送消息')
     }
   }
@@ -200,12 +207,14 @@ export function useWebSocket(): WebSocketService {
       // 将字符串颜色映射为后端约定的数字：1 红胜, 2 黑胜
       const mapping: Record<string, number> = { red: 1, black: 2 }
       const w = mapping[winner]
-      if (w) payload.winner = w
+      if (w)
+        payload.winner = w
     }
     sendMessage(payload)
   }
 
   const join = (roomId: number) => {
+    currentRoomId.value = roomId // 记录当前房间ID
     sendMessage({
       type: MessageType.Join,
       roomId,
@@ -255,7 +264,8 @@ export function useWebSocket(): WebSocketService {
         // data may contain { winner: 'red' | 'black' }
         if (data && (data as any).winner) {
           end((data as any).winner)
-        } else {
+        }
+        else {
           // fallback: send end without winner
           end()
         }
@@ -316,7 +326,10 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
-  return { 
+  // 新增：获取当前房间ID的方法
+  const getCurrentRoomId = () => currentRoomId.value
+
+  return {
     connect,
     close,
     end,
@@ -329,6 +342,7 @@ export function useWebSocket(): WebSocketService {
     sendRegretResponse,
     sendChatMessage,
     sendDrawRequest,
-    sendDrawResponse
+    sendDrawResponse,
+    getCurrentRoomId, // 新增导出获取当前房间ID的方法
   }
 }
