@@ -26,6 +26,7 @@ import (
 const (
 	HeartbeatInterval = 5 * time.Second  // 发送心跳的间隔
 	HeartbeatTimeout  = 30 * time.Second // 心跳超时时间
+	ReconnectGrace    = 8 * time.Second  // 断线后等待重连的宽限时间
 )
 
 var upgrader = &websocket.Upgrader{
@@ -45,17 +46,20 @@ type ChessHub struct {
 	mu         sync.Mutex
 	pool       *utils.WorkerPool
 	matchPool  [](*Client)
+	// 记录断开后的延迟删除定时器，以支持短时重连
+	disconnectTimers map[int]*time.Timer
 }
 
 func NewChessHub() *ChessHub {
 	pool := utils.NewWorkerPool()
 	hub := &ChessHub{
-		Rooms:      make(map[int](*ChessRoom)),
-		Clients:    make(map[int]*Client),
-		commands:   make(chan hubCommand),
-		spareRooms: make([]room.RoomInfo, 0),
-		mu:         sync.Mutex{},
-		pool:       pool,
+		Rooms:            make(map[int](*ChessRoom)),
+		Clients:          make(map[int]*Client),
+		commands:         make(chan hubCommand),
+		spareRooms:       make([]room.RoomInfo, 0),
+		mu:               sync.Mutex{},
+		pool:             pool,
+		disconnectTimers: make(map[int]*time.Timer),
 	}
 	pool.Start()
 
@@ -110,16 +114,35 @@ func (ch *ChessHub) Run() {
 					ch.mu.Unlock()
 				}
 				ch.mu.Lock()
+				// 从 Clients 中移除
 				if _, ok := ch.Clients[client.Id]; ok {
 					delete(ch.Clients, client.Id)
-					client.Conn.Close()
+					if client.Conn != nil {
+						client.Conn.Close()
+					}
+				}
+				// 从匹配池中移除任何残留的该客户端引用，避免再次被匹配
+				for i := len(ch.matchPool) - 1; i >= 0; i-- {
+					if ch.matchPool[i].Id == client.Id {
+						ch.matchPool = append(ch.matchPool[:i], ch.matchPool[i+1:]...)
+					}
 				}
 				ch.mu.Unlock()
 				database.DeleteValue(fmt.Sprint(client.Id))
 			case commandMatch:
 				client := cmd.client
 				ch.mu.Lock()
-				ch.matchPool = append(ch.matchPool, client)
+				// 防止重复加入匹配池
+				already := false
+				for _, c := range ch.matchPool {
+					if c.Id == client.Id {
+						already = true
+						break
+					}
+				}
+				if !already {
+					ch.matchPool = append(ch.matchPool, client)
+				}
 				fmt.Println(ch.matchPool)
 				if len(ch.matchPool) < 2 {
 					client.sendMessage(NormalMessage{
@@ -254,6 +277,77 @@ func (ch *ChessHub) Run() {
 				// 更新客户端的最后一次心跳时间
 				client := cmd.client
 				client.LastPong = time.Now()
+
+			case commandDisconnect:
+				// 当检测到连接断开时，设置一个定时器等待客户端重连，超时后再真正注销
+				client := cmd.client
+				ch.mu.Lock()
+				// 如果已有定时器则先停止
+				if t, ok := ch.disconnectTimers[client.Id]; ok {
+					t.Stop()
+				}
+				// 标记连接为空
+				if existing, ok := ch.Clients[client.Id]; ok {
+					existing.Conn = nil
+					// 如果该玩家在匹配池中，立即移除，避免在短暂断线时被匹配
+					for i := len(ch.matchPool) - 1; i >= 0; i-- {
+						if ch.matchPool[i].Id == existing.Id {
+							ch.matchPool = append(ch.matchPool[:i], ch.matchPool[i+1:]...)
+						}
+					}
+				}
+				// 通知对手：对方断线，正在等待重连
+				room := ch.Rooms[client.RoomId]
+				if room != nil {
+					var target *Client
+					if room.Current == client {
+						target = room.Next
+					} else {
+						target = room.Current
+					}
+					if target != nil {
+						ch.sendMessage(target, NormalMessage{BaseMessage: BaseMessage{Type: messageNormal}, Message: "对方连接中断，正在等待重连"})
+					}
+				}
+
+				// 启动定时器，宽限期到达则根据当时状态决定处理方式
+				t := time.AfterFunc(ReconnectGrace, func() {
+					ch.mu.Lock()
+					currentClient, exists := ch.Clients[client.Id]
+					ch.mu.Unlock()
+					if !exists {
+						return // 玩家已被清理
+					}
+
+					// 若玩家仍在游戏中，则判对手胜
+					if currentClient.Status == userPlaying {
+						var winner clientRole
+						if currentClient.Role == roleRed {
+							winner = roleBlack
+						} else if currentClient.Role == roleBlack {
+							winner = roleRed
+						} else {
+							winner = roleNone
+						}
+						ch.commands <- hubCommand{
+							commandType: commandEnd,
+							client:      currentClient,
+							payload:     winner,
+						}
+					} else {
+						// 若玩家不在游戏中（已离开或空闲），则直接注销
+						ch.commands <- hubCommand{
+							commandType: commandUnregister,
+							client:      currentClient,
+						}
+					}
+					// 清理定时器记录
+					ch.mu.Lock()
+					delete(ch.disconnectTimers, client.Id)
+					ch.mu.Unlock()
+				})
+				ch.disconnectTimers[client.Id] = t
+				ch.mu.Unlock()
 			case commandJoin:
 				joinMsg := cmd.payload.(joinMessage)
 				ch.mu.Lock()
@@ -376,8 +470,76 @@ func (ch *ChessHub) HandleConnection(c *gin.Context) {
 		return
 	}
 
-	// 创建一个新的客户端
-	client := NewClient(conn, id, user.Name)
+	// 检查是否已有客户端实例（短时重连）
+	var client *Client
+	ch.mu.Lock()
+	existing, exists := ch.Clients[id]
+	if exists {
+		// 若存在断线定时器，取消它（客户端正在重连）
+		if t, ok := ch.disconnectTimers[id]; ok {
+			t.Stop()
+			delete(ch.disconnectTimers, id)
+		}
+		// 复用现有客户端结构，仅替换连接
+		existing.Conn = conn
+		existing.LastPong = time.Now()
+		existing.Username = user.Name
+		client = existing
+
+		// 关键：检查房间是否还存在
+		// 若房间已被清理（定时器到期导致的结果），则重置玩家状态为"在线"
+		_, roomExists := ch.Rooms[client.RoomId]
+		if !roomExists || client.RoomId == -1 {
+			// 房间已不存在或玩家未在房间中，重置状态以允许重新匹配
+			existing.Status = userOnline
+			existing.RoomId = -1
+			existing.Role = roleNone
+		}
+		ch.mu.Unlock()
+
+		// 通知客户端重连成功
+		client.sendMessage(NormalMessage{BaseMessage: BaseMessage{Type: messageNormal}, Message: "重连成功"})
+
+		// 如果房间已被清理（例如对局已结束），发送同步消息以清理客户端的本地对局状态
+		if !roomExists || client.RoomId == -1 {
+			client.sendMessage(SyncMessage{BaseMessage: BaseMessage{Type: messageSync}, History: []Position{}, Role: "", CurrentTurn: ""})
+		}
+
+		// 若房间仍存在且玩家在其中，发送房间当前状态（同步棋步、角色与当前轮次）
+		if roomExists && client.RoomId != -1 {
+			ch.mu.Lock()
+			room := ch.Rooms[client.RoomId]
+			if room != nil {
+				history := make([]Position, len(room.History))
+				copy(history, room.History)
+				var roleStr string
+				if client.Role == roleRed {
+					roleStr = "red"
+				} else if client.Role == roleBlack {
+					roleStr = "black"
+				}
+				var currentTurn string
+				if room.Current != nil {
+					if room.Current.Role == roleRed {
+						currentTurn = "red"
+					} else if room.Current.Role == roleBlack {
+						currentTurn = "black"
+					}
+				}
+				ch.mu.Unlock()
+				client.sendMessage(SyncMessage{BaseMessage: BaseMessage{Type: messageSync}, History: history, Role: roleStr, CurrentTurn: currentTurn})
+			} else {
+				ch.mu.Unlock()
+			}
+		}
+	} else {
+		ch.mu.Unlock()
+		client = NewClient(conn, id, user.Name)
+		ch.commands <- hubCommand{
+			commandType: commandRegister,
+			client:      client,
+		}
+	}
 
 	conn.SetReadLimit(1024 * 1024)
 	conn.SetPongHandler(func(string) error {
@@ -405,13 +567,10 @@ func (ch *ChessHub) HandleConnection(c *gin.Context) {
 		}
 	}()
 
-	ch.commands <- hubCommand{
-		commandType: commandRegister,
-		client:      client,
-	}
+	// 断开时不立即注销，而是进入断线等待流程，使用 commandDisconnect 启动定时器
 	defer func() {
 		ch.commands <- hubCommand{
-			commandType: commandUnregister,
+			commandType: commandDisconnect,
 			client:      client,
 		}
 	}()
@@ -659,188 +818,4 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 		}
 	}
 	return nil
-}
-
-func (ch *ChessHub) sendMessage(client *Client, message any) {
-	ch.commands <- hubCommand{
-		commandType: commandSendMessage,
-		payload: sendMessageRequest{
-			target:  client,
-			message: message,
-		},
-	}
-}
-
-// 新增：处理悔棋请求（转发给对手）
-func (ch *ChessHub) handleRegretRequest(requester *Client) {
-	ch.mu.Lock()
-	room, ok := ch.Rooms[requester.RoomId]
-	ch.mu.Unlock()
-	if !ok {
-		requester.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "房间不存在",
-		})
-		return
-	}
-
-	// 确定对手
-	var opponent *Client
-	if room.Current == requester {
-		opponent = room.Next
-	} else {
-		opponent = room.Current
-	}
-	if opponent == nil {
-		requester.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "对手不存在",
-		})
-		return
-	}
-
-	// 向对手发送悔棋请求
-	opponent.sendMessage(NormalMessage{
-		BaseMessage: BaseMessage{Type: messageRegretRequest},
-		Message:     "对方请求悔棋",
-	})
-}
-
-// 新增：处理悔棋响应（同步双方状态）
-func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
-	ch.mu.Lock()
-	room, ok := ch.Rooms[responder.RoomId]
-	ch.mu.Unlock()
-	if !ok {
-		responder.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "房间不存在",
-		})
-		return
-	}
-
-	// 确定悔棋请求发起方
-	var requester *Client
-	if room.Current == responder {
-		requester = room.Next
-	} else {
-		requester = room.Current
-	}
-	if requester == nil {
-		responder.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "请求方不存在",
-		})
-		return
-	}
-
-	if accepted {
-		// 同意悔棋：同步双方执行悔棋，更新房间历史记录
-		room.mu.Lock()
-		if len(room.History) > 0 {
-			room.History = room.History[:len(room.History)-1] // 移除最后一步,这个有争议，需要后续修改
-		}
-		room.mu.Unlock()
-
-		// 通知请求方执行悔棋
-		respMsg := RegretResponseMessage{
-			BaseMessage: BaseMessage{Type: messageRegretResponse},
-			Accepted:    true,
-		}
-		requester.sendMessage(respMsg)
-		if room.Current == responder {
-			room.Current = requester
-			room.Next = responder
-		}
-	} else {
-		// 拒绝悔棋：仅通知请求方
-		requester.sendMessage(RegretResponseMessage{
-			BaseMessage: BaseMessage{Type: messageRegretResponse},
-			Accepted:    false,
-		})
-	}
-}
-
-// 新增：处理和棋请求（转发给对手）
-func (ch *ChessHub) handleDrawRequest(requester *Client) {
-	ch.mu.Lock()
-	room, ok := ch.Rooms[requester.RoomId]
-	ch.mu.Unlock()
-	if !ok {
-		requester.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "房间不存在",
-		})
-		return
-	}
-
-	var opponent *Client
-	if room.Current == requester {
-		opponent = room.Next
-	} else {
-		opponent = room.Current
-	}
-	if opponent == nil {
-		requester.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "对手不存在",
-		})
-		return
-	}
-
-	// 向对手发送和棋请求（使用 NormalMessage 携带类型）
-	opponent.sendMessage(NormalMessage{
-		BaseMessage: BaseMessage{Type: messageDrawRequest},
-		Message:     "对方请求和棋",
-	})
-}
-
-// 新增：处理和棋响应（若同意则结束为和棋）
-func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
-	ch.mu.Lock()
-	room, ok := ch.Rooms[responder.RoomId]
-	ch.mu.Unlock()
-	if !ok {
-		responder.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "房间不存在",
-		})
-		return
-	}
-
-	// 确定请求方
-	var requester *Client
-	if room.Current == responder {
-		requester = room.Next
-	} else {
-		requester = room.Current
-	}
-	if requester == nil {
-		responder.sendMessage(NormalMessage{
-			BaseMessage: BaseMessage{Type: messageError},
-			Message:     "请求方不存在",
-		})
-		return
-	}
-
-	// 通知请求方和棋响应
-	respMsg := DrawResponseMessage{
-		BaseMessage: BaseMessage{Type: messageDrawResponse},
-		Accepted:    accepted,
-	}
-	requester.sendMessage(respMsg)
-
-	if accepted {
-		// 若同意，发送结束消息（和棋, winner = roleNone）给双方并清理房间
-		endMsg := endMessage{
-			BaseMessage: BaseMessage{Type: messageEnd},
-			Winner:      roleNone,
-		}
-		room.Current.sendMessage(endMsg)
-		room.Next.sendMessage(endMsg)
-		room.clear()
-		ch.mu.Lock()
-		delete(ch.Rooms, requester.RoomId)
-		ch.mu.Unlock()
-	}
 }

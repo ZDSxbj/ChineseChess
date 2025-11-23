@@ -12,7 +12,12 @@ interface GameEvents {
     color: color
   }
   'NET:GAME:END': {
-    winner: color
+    winner: string
+  }
+  'NET:GAME:SYNC': {
+    history: any[]
+    role?: string
+    currentTurn?: string
   }
   'NET:DRAW:REQUEST': Record<string, never>
   'NET:DRAW:RESPONSE': {

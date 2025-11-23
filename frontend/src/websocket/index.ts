@@ -18,6 +18,7 @@ const MessageType = {
   DrawRequest: 13, // 和棋请求
   DrawResponse: 14, // 和棋响应
   ChatMessage: 15, // 聊天消息
+  Sync: 16, // 同步房间状态（重连时服务端发送）
 } as const
 
 interface WebSocketMessage {
@@ -155,6 +156,14 @@ export function useWebSocket(): WebSocketService {
         if (sender && content) {
           channel.emit('NET:CHAT:MESSAGE', { sender, content })
         }
+        break
+      }
+      case MessageType.Sync: {
+        // 服务端发送的重连同步消息，转发到事件通道
+        // 格式参考后端: { history: Position[], role: 'red'|'black', currentTurn: 'red'|'black' }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const payload = data as any
+        channel.emit('NET:GAME:SYNC', { history: payload.history || [], role: payload.role, currentTurn: payload.currentTurn })
         break
       }
       default:

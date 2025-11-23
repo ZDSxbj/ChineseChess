@@ -63,3 +63,187 @@ func (c *Client) startPlay(role clientRole) {
 	c.Role = role
 	c.Status = userPlaying
 }
+
+func (ch *ChessHub) sendMessage(client *Client, message any) {
+	ch.commands <- hubCommand{
+		commandType: commandSendMessage,
+		payload: sendMessageRequest{
+			target:  client,
+			message: message,
+		},
+	}
+}
+
+// 新增：处理悔棋请求（转发给对手）
+func (ch *ChessHub) handleRegretRequest(requester *Client) {
+	ch.mu.Lock()
+	room, ok := ch.Rooms[requester.RoomId]
+	ch.mu.Unlock()
+	if !ok {
+		requester.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "房间不存在",
+		})
+		return
+	}
+
+	// 确定对手
+	var opponent *Client
+	if room.Current == requester {
+		opponent = room.Next
+	} else {
+		opponent = room.Current
+	}
+	if opponent == nil {
+		requester.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "对手不存在",
+		})
+		return
+	}
+
+	// 向对手发送悔棋请求
+	opponent.sendMessage(NormalMessage{
+		BaseMessage: BaseMessage{Type: messageRegretRequest},
+		Message:     "对方请求悔棋",
+	})
+}
+
+// 新增：处理悔棋响应（同步双方状态）
+func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
+	ch.mu.Lock()
+	room, ok := ch.Rooms[responder.RoomId]
+	ch.mu.Unlock()
+	if !ok {
+		responder.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "房间不存在",
+		})
+		return
+	}
+
+	// 确定悔棋请求发起方
+	var requester *Client
+	if room.Current == responder {
+		requester = room.Next
+	} else {
+		requester = room.Current
+	}
+	if requester == nil {
+		responder.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "请求方不存在",
+		})
+		return
+	}
+
+	if accepted {
+		// 同意悔棋：同步双方执行悔棋，更新房间历史记录
+		room.mu.Lock()
+		if len(room.History) > 0 {
+			room.History = room.History[:len(room.History)-1] // 移除最后一步,这个有争议，需要后续修改
+		}
+		room.mu.Unlock()
+
+		// 通知请求方执行悔棋
+		respMsg := RegretResponseMessage{
+			BaseMessage: BaseMessage{Type: messageRegretResponse},
+			Accepted:    true,
+		}
+		requester.sendMessage(respMsg)
+		if room.Current == responder {
+			room.Current = requester
+			room.Next = responder
+		}
+	} else {
+		// 拒绝悔棋：仅通知请求方
+		requester.sendMessage(RegretResponseMessage{
+			BaseMessage: BaseMessage{Type: messageRegretResponse},
+			Accepted:    false,
+		})
+	}
+}
+
+// 新增：处理和棋请求（转发给对手）
+func (ch *ChessHub) handleDrawRequest(requester *Client) {
+	ch.mu.Lock()
+	room, ok := ch.Rooms[requester.RoomId]
+	ch.mu.Unlock()
+	if !ok {
+		requester.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "房间不存在",
+		})
+		return
+	}
+
+	var opponent *Client
+	if room.Current == requester {
+		opponent = room.Next
+	} else {
+		opponent = room.Current
+	}
+	if opponent == nil {
+		requester.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "对手不存在",
+		})
+		return
+	}
+
+	// 向对手发送和棋请求（使用 NormalMessage 携带类型）
+	opponent.sendMessage(NormalMessage{
+		BaseMessage: BaseMessage{Type: messageDrawRequest},
+		Message:     "对方请求和棋",
+	})
+}
+
+// 新增：处理和棋响应（若同意则结束为和棋）
+func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
+	ch.mu.Lock()
+	room, ok := ch.Rooms[responder.RoomId]
+	ch.mu.Unlock()
+	if !ok {
+		responder.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "房间不存在",
+		})
+		return
+	}
+
+	// 确定请求方
+	var requester *Client
+	if room.Current == responder {
+		requester = room.Next
+	} else {
+		requester = room.Current
+	}
+	if requester == nil {
+		responder.sendMessage(NormalMessage{
+			BaseMessage: BaseMessage{Type: messageError},
+			Message:     "请求方不存在",
+		})
+		return
+	}
+
+	// 通知请求方和棋响应
+	respMsg := DrawResponseMessage{
+		BaseMessage: BaseMessage{Type: messageDrawResponse},
+		Accepted:    accepted,
+	}
+	requester.sendMessage(respMsg)
+
+	if accepted {
+		// 若同意，发送结束消息（和棋, winner = roleNone）给双方并清理房间
+		endMsg := endMessage{
+			BaseMessage: BaseMessage{Type: messageEnd},
+			Winner:      roleNone,
+		}
+		room.Current.sendMessage(endMsg)
+		room.Next.sendMessage(endMsg)
+		room.clear()
+		ch.mu.Lock()
+		delete(ch.Rooms, requester.RoomId)
+		ch.mu.Unlock()
+	}
+}

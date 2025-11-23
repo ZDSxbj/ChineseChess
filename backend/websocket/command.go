@@ -5,6 +5,7 @@ type CommendType int
 const (
 	commandRegister       CommendType = iota + 1 // 注册
 	commandUnregister                            // 注销
+	commandDisconnect                            // 断线：短时等待重连
 	commandMatch                                 // 匹配
 	commandMove                                  // 移动
 	commandSendMessage                           // 发送消息

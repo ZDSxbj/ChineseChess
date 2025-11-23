@@ -18,6 +18,7 @@ const (
 	messageDrawRequest    MessageType = 13 // 和棋请求
 	messageDrawResponse   MessageType = 14 // 和棋响应
 	messageChatMessage    MessageType = 15 // 聊天消息 (与前端保持一致)
+	messageSync           MessageType = 16 // 同步当前房间状态（重连使用）
 )
 
 type BaseMessage struct {
@@ -69,4 +70,12 @@ type ChatMessage struct {
 	BaseMessage
 	Content string `json:"content"`
 	Sender  string `json:"sender"`
+}
+
+// SyncMessage 用于在玩家重连时将房间当前的棋步历史、玩家角色和当前轮次同步给客户端
+type SyncMessage struct {
+	BaseMessage
+	History     []Position `json:"history"`
+	Role        string     `json:"role"`
+	CurrentTurn string     `json:"currentTurn"`
 }

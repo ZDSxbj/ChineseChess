@@ -53,3 +53,43 @@ export function clearGameState() {
     console.error('Failed to clear game state:', error)
   }
 }
+
+// ---------- 弹窗状态（用于悔棋/和棋模态在刷新后的恢复） ----------
+export interface ModalState {
+  regretModalVisible?: boolean
+  regretModalType?: 'requesting' | 'responding'
+  drawModalVisible?: boolean
+  drawModalType?: 'requesting' | 'responding'
+}
+
+const MODAL_STATE_KEY = 'chess_modal_state'
+
+export function saveModalState(state: ModalState) {
+  try {
+    sessionStorage.setItem(MODAL_STATE_KEY, JSON.stringify(state))
+  }
+  catch (error) {
+    console.error('Failed to save modal state:', error)
+  }
+}
+
+export function getModalState(): ModalState | null {
+  try {
+    const raw = sessionStorage.getItem(MODAL_STATE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as ModalState
+  }
+  catch (error) {
+    console.error('Failed to get modal state:', error)
+    return null
+  }
+}
+
+export function clearModalState() {
+  try {
+    sessionStorage.removeItem(MODAL_STATE_KEY)
+  }
+  catch (error) {
+    console.error('Failed to clear modal state:', error)
+  }
+}

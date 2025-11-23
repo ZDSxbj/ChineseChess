@@ -128,12 +128,7 @@ class ChessBoard {
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
     piece.move(to)
-    saveGameState({
-      isNetPlay: this.isNetPlay,
-      selfColor: this.selfColor,
-      moveHistory: this.moveHistory,
-      currentRole: this.currentRole,
-    })
+
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
@@ -189,6 +184,12 @@ class ChessBoard {
     // 切换回合
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     // showMsg(`现在是${this.currentRole}的回合`)
+    saveGameState({
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    })
   }
 
   // 实际执行悔棋的方法
@@ -256,11 +257,15 @@ class ChessBoard {
   }
 
   private listenClick() {
+    // 如果已经存在注册的回调，先移除，避免重复绑定导致后续无法正确移除
+    if (this.clickCallback) {
+      this.chessesElement.removeEventListener('click', this.clickCallback)
+    }
     this.clickCallback = this.clickHandler.bind(this)
     this.chessesElement.addEventListener('click', this.clickCallback)
   }
 
-  private end(winner: string) {
+  private end(_winner: string) {
     this.chessesElement.removeEventListener('click', this.clickCallback)
   }
 
