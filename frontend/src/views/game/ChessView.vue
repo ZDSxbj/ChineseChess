@@ -170,6 +170,7 @@ onMounted(() => {
     chessBoard.restoreState(savedState)
     console.log('Game state restored from localStorage')
   }
+
   // 恢复弹窗状态（若有）
   const modalState = getModalState()
   if (modalState) {
@@ -178,6 +179,14 @@ onMounted(() => {
     drawModalVisible.value = !!modalState.drawModalVisible
     drawModalType.value = modalState.drawModalType || 'requesting'
   }
+
+  // 新增：保存初始游戏状态
+  saveGameState({
+    isNetPlay: chessBoard.isNetworkPlay(),
+    selfColor: chessBoard.SelfColor,
+    moveHistory: chessBoard.moveHistoryList, // 初始为空
+    currentRole: chessBoard.currentRole,
+  })
   channel.on('NET:GAME:START', ({ color }) => {
     console.log('Game started, color:', color)
     chessBoard.stop()
@@ -196,6 +205,12 @@ onMounted(() => {
   // 处理服务端同步消息（重连时）
   channel.on('NET:GAME:SYNC', (data: any) => {
     const { role, currentTurn } = data
+    // 如果本地保存的状态明确表示这是本地对局，则忽略服务端的 SYNC，避免错误切换到联机模式
+    const localSaved = getGameState()
+    if (localSaved && localSaved.isNetPlay === false) {
+      console.log('Ignoring NET:GAME:SYNC because local saved state indicates local play')
+      return
+    }
     // 以服务端为准，重新启动网络棋盘并尝试恢复本地保存的棋谱
     chessBoard.stop()
     chessBoard.start(role || 'red', true)

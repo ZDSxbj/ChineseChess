@@ -69,6 +69,10 @@ class ChessBoard {
     return this.moveHistory
   }
 
+  get SelfColor(): ChessColor {
+    return this.selfColor
+  }
+
   private clickHandler(event: MouseEvent) {
     const rect = this.chessesElement.getBoundingClientRect()
     const x = Math.floor((event.clientX - rect.left) / this.gridSize)
