@@ -142,7 +142,10 @@ class ChessBoard {
     if (targetPiece) {
       if (targetPiece instanceof King) {
         const moverColor = piece.color
-        channel.emit('GAME:END', { winner: moverColor })
+        channel.emit('GAME:END', { winner: moverColor, online: this.isNetPlay })
+        if (!this.isNetPlay) {
+          channel.emit('LOCAL:GAME:END', { winner: moverColor })
+        }
         this.end(moverColor)
         return
       }
@@ -173,7 +176,10 @@ class ChessBoard {
           if (!blocked) {
             // 将帅相对时，移动方落败，对方胜
             const opponentColor = piece.color === 'red' ? 'black' : 'red'
-            channel.emit('GAME:END', { winner: opponentColor })
+            channel.emit('GAME:END', { winner: opponentColor, online: this.isNetPlay })
+            if (!this.isNetPlay) {
+              channel.emit('LOCAL:GAME:END', { winner: opponentColor })
+            }
             this.end(opponentColor)
             return
           }

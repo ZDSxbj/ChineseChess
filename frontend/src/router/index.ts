@@ -54,6 +54,11 @@ const router = createRouter({
           name: 'game-chess',
           component: () => import('../views/game/ChessView.vue'),
         },
+        {
+          path: 'replay',
+          name: 'game-replay',
+          component: () => import('../views/game/ReplayView.vue'),
+        },
       ],
     },
   ],

@@ -161,7 +161,6 @@ export function useWebSocket(): WebSocketService {
       case MessageType.Sync: {
         // 服务端发送的重连同步消息，转发到事件通道
         // 格式参考后端: { history: Position[], role: 'red'|'black', currentTurn: 'red'|'black' }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload = data as any
         channel.emit('NET:GAME:SYNC', { history: payload.history || [], role: payload.role, currentTurn: payload.currentTurn })
         break
@@ -270,13 +269,16 @@ export function useWebSocket(): WebSocketService {
         move(from, to)
       })
       channel.on('GAME:END', (data: any) => {
-        // data may contain { winner: 'red' | 'black' }
-        if (data && (data as any).winner) {
-          end((data as any).winner)
-        }
-        else {
-          // fallback: send end without winner
-          end()
+        // data may contain { winner: 'red' | 'black', online: boolean }
+        const isOnline = data && typeof data.online === 'boolean' ? data.online : true
+        if (isOnline) {
+          if (data && (data as any).winner) {
+            end((data as any).winner)
+          }
+          else {
+            // fallback: send end without winner
+            end()
+          }
         }
       })
       // flush pending messages

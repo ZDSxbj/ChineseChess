@@ -4,6 +4,7 @@ import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ChatPanel from '@/components/ChatPanel.vue'
+import GameEndModal from '@/components/GameEndModal.vue'
 import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
@@ -27,6 +28,8 @@ const regretModalType = ref<'requesting' | 'responding'>('requesting')
 const gameOver = ref(false)
 const drawModalVisible = ref(false)
 const drawModalType = ref<'requesting' | 'responding'>('requesting')
+const endModalVisible = ref(false)
+const endResult = ref<'win' | 'lose' | 'draw' | null>(null)
 
 function handleRegretAccept() {
   if (gameOver.value) {
@@ -76,6 +79,17 @@ function handleDrawReject() {
   showMsg('已拒绝对方的和棋请求')
 }
 
+function review() {
+  // 确保保存最新的局面到 sessionStorage
+  saveGameState({
+    isNetPlay: chessBoard.isNetworkPlay(),
+    selfColor: chessBoard.SelfColor,
+    moveHistory: chessBoard.moveHistoryList,
+    currentRole: chessBoard.currentRole,
+  })
+  router.push('/game/replay')
+}
+
 function decideSize(isPCBool: boolean) {
   return isPCBool ? 70 : 40
 }
@@ -90,7 +104,14 @@ function giveUp() {
     showMsg('游戏已结束')
     return
   }
-  ws?.giveUp()
+  if (networkPlay.value) {
+    ws?.giveUp()
+  }
+  else {
+    // 本地对局直接触发本地结束事件，胜者为对手
+    const opponentColor = chessBoard.SelfColor === 'red' ? 'black' : 'red'
+    channel.emit('GAME:END', { winner: opponentColor, online: false })
+  }
 }
 
 function offerDraw() {
@@ -116,6 +137,15 @@ function quit() {
   }
   clearGameState() // 退出时清除状态
   clearModalState() // 退出时清除模态状态，防止下次进入时残留
+  // 关键：临时注册空处理，消费队列中缓存的 NET:GAME:END 事件
+  // const emptyHandler = () => {
+  //   showMsg('捕捉到了信息')
+  // }
+  // channel.on('NET:GAME:END', emptyHandler)
+  // // 立即移除空处理，避免影响后续逻辑
+  // channel.off('NET:GAME:END') // 注意：需要 channel 支持移除指定 handler
+  // 关键修复：清空NET:GAME:END事件队列，避免残留
+  channel.clearQueue('NET:GAME:END')
   router.push('/')
 }
 // 新增悔棋函数
@@ -187,11 +217,17 @@ onMounted(() => {
     moveHistory: chessBoard.moveHistoryList, // 初始为空
     currentRole: chessBoard.currentRole,
   })
+  // 清空消息队列
+  channel.clearQueue('NET:GAME:END')
   channel.on('NET:GAME:START', ({ color }) => {
     console.log('Game started, color:', color)
     chessBoard.stop()
     chessBoard.start(color, true)
     networkPlay.value = true
+    // 重置结束模态与结果，避免上局结束弹窗残留
+    endModalVisible.value = false
+    endResult.value = null
+    gameOver.value = false
     // 新增：保存初始游戏状态
     saveGameState({
       isNetPlay: chessBoard.isNetworkPlay(),
@@ -200,11 +236,19 @@ onMounted(() => {
       moveHistory: chessBoard.moveHistoryList, // 初始为空
       currentRole: chessBoard.currentRole,
     })
+    // 清空消息队列
+    channel.clearQueue('NET:GAME:END')
   })
 
   // 处理服务端同步消息（重连时）
   channel.on('NET:GAME:SYNC', (data: any) => {
-    const { role, currentTurn } = data
+    const { role, currentTurn, roomId } = data
+    // 如果服务端的 roomId 与当前客户端的 roomId 不匹配，忽略该 SYNC（可能是上局残留）
+    const currentRoom = ws.getCurrentRoomId && ws.getCurrentRoomId()
+    if (roomId !== undefined && currentRoom !== undefined && roomId !== currentRoom) {
+      console.log('Ignored NET:GAME:SYNC for different room', roomId, currentRoom)
+      return
+    }
     // 如果本地保存的状态明确表示这是本地对局，则忽略服务端的 SYNC，避免错误切换到联机模式
     const localSaved = getGameState()
     if (localSaved && localSaved.isNetPlay === false) {
@@ -215,6 +259,10 @@ onMounted(() => {
     chessBoard.stop()
     chessBoard.start(role || 'red', true)
     networkPlay.value = true
+    // 重置上局的结束弹窗与状态，避免残留影响新的联机对局
+    endModalVisible.value = false
+    endResult.value = null
+    gameOver.value = false
     // 尝试从 sessionStorage 恢复历史（若存在）
     const savedState = getGameState()
     if (savedState && savedState.isNetPlay) {
@@ -262,6 +310,9 @@ onMounted(() => {
     }
   })
   channel.on('NET:GAME:END', ({ winner }) => {
+    if (chessBoard.isNetworkPlay() === false) {
+      return
+    }
     gameOver.value = true
     if (winner === 'red') {
       showMsg('红方胜利')
@@ -273,8 +324,41 @@ onMounted(() => {
       showMsg('和棋')
     }
     chessBoard?.disableInteraction()
+    // 保存游戏结束前的当前历史到 sessionStorage，以便复盘页面读取
+    saveGameState({
+      isNetPlay: chessBoard.isNetworkPlay(),
+      selfColor: chessBoard.SelfColor,
+      moveHistory: chessBoard.moveHistoryList,
+      currentRole: chessBoard.currentRole,
+    })
+    // 计算当前客户端对局结果
+    if (winner === 'draw') {
+      endResult.value = 'draw'
+    }
+    else {
+      const myColor = chessBoard.SelfColor
+      endResult.value = winner === myColor ? 'win' : 'lose'
+    }
+    endModalVisible.value = true
     // 游戏结束时清理模态状态，避免残留在 sessionStorage 中
     clearModalState()
+  })
+
+  channel.on('LOCAL:GAME:END', ({ winner }: any) => {
+    if (chessBoard.isNetworkPlay()) {
+      return
+    }
+    gameOver.value = true
+    if (winner === 'red') {
+      showMsg('红方胜利')
+    }
+    else if (winner === 'black') {
+      showMsg('黑方胜利')
+    }
+    else {
+      showMsg('和棋')
+    }
+    chessBoard?.disableInteraction()
   })
   // 监听悔棋请求
   channel.on('NET:CHESS:REGRET:REQUEST', () => {
@@ -309,6 +393,8 @@ onMounted(() => {
 })
 onUnmounted(() => {
   channel.off('NET:GAME:START')
+  channel.off('NET:GAME:END')
+  channel.off('LOCAL:GAME:END')
   channel.off('NET:CHESS:REGRET:REQUEST')
   channel.off('NET:CHESS:REGRET:RESPONSE')
   channel.off('NET:DRAW:REQUEST')
@@ -390,5 +476,12 @@ onUnmounted(() => {
     :on-accept="handleDrawAccept"
     :on-reject="handleDrawReject"
     @close="drawModalVisible = false"
+  />
+  <GameEndModal
+    :visible="endModalVisible"
+    :result="endResult"
+    :on-review="review"
+    :on-quit="quit"
+    @close="endModalVisible = false"
   />
 </template>
