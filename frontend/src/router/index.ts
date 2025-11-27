@@ -25,6 +25,25 @@ const router = createRouter({
           name: 'room',
           component: () => import('../views/default/RoomView.vue'),
         },
+        // 个人主页路由（带登录校验）
+        { 
+          path: 'profile', 
+          name: 'profile', 
+          component: () => import('../views/profile/ProfileHub.vue'), 
+          meta: { requiresAuth: true }, // 必须登录才能访问
+          children: [
+            {
+              path: 'info', // 子路由，个人信息
+              name: 'profile-info',
+              component: () => import('../views/profile/Profile.vue') // 指向个人信息详情页
+            },
+            {
+              path: 'records', // 子路由，行棋记录
+              name: 'profile-records',
+              component: () => import('../views/profile/GameRecords.vue') // 指向行棋记录页
+            }
+          ]
+        }
       ],
     },
     {
@@ -62,6 +81,19 @@ const router = createRouter({
       ],
     },
   ],
+})
+
+// 路由守卫：校验需要登录的路由
+router.beforeEach((to, from, next) => {
+  const requiresAuth = to.meta.requiresAuth
+  // 根据实际项目调整登录判断（如Pinia状态、localStorage token）
+  const isLoggedIn = localStorage.getItem('token') || false
+
+  if (requiresAuth && !isLoggedIn) {
+    next('/auth/login') // 未登录则跳登录页
+  } else {
+    next() // 已登录或无需登录，正常跳转
+  }
 })
 
 function logout() {
