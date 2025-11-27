@@ -120,6 +120,10 @@ class ChessBoard {
     if (!piece.isMoveValid(to, this.board)) {
       return
     }
+    // 先在数据结构上应用移动（模拟新的棋盘状态），再绘制
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
+    piece.move(to)
     // 记录历史
     this.moveHistory.push({
       from: { ...from },
@@ -127,16 +131,19 @@ class ChessBoard {
       capturedPiece: targetPiece || null,
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
     })
-
-    // 先在数据结构上应用移动（模拟新的棋盘状态），再绘制
-    delete this.board[from.x][from.y]
-    this.board[to.x][to.y] = piece
-    piece.move(to)
-
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
     }
+    // 切换回合
+    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    // showMsg(`现在是${this.currentRole}的回合`)
+    saveGameState({
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    })
 
     // 如果直接吃掉对方的将，立即判定结束（移动方胜）
     if (targetPiece) {
@@ -191,15 +198,15 @@ class ChessBoard {
       console.error('face-to-face check error', e)
     }
 
-    // 切换回合
-    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
-    // showMsg(`现在是${this.currentRole}的回合`)
-    saveGameState({
-      isNetPlay: this.isNetPlay,
-      selfColor: this.selfColor,
-      moveHistory: this.moveHistory,
-      currentRole: this.currentRole,
-    })
+    // // 切换回合
+    // this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    // // showMsg(`现在是${this.currentRole}的回合`)
+    // saveGameState({
+    //   isNetPlay: this.isNetPlay,
+    //   selfColor: this.selfColor,
+    //   moveHistory: this.moveHistory,
+    //   currentRole: this.currentRole,
+    // })
   }
 
   // 实际执行悔棋的方法
