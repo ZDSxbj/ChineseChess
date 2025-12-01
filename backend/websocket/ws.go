@@ -3,6 +3,8 @@ package websocket
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,6 +20,7 @@ import (
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/room"
 	dtouser "chinese-chess-backend/dto/user"
+	recordModel "chinese-chess-backend/model/record"
 	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/utils"
 	"slices"
@@ -198,6 +201,12 @@ func (ch *ChessHub) Run() {
 
 				target.sendMessage(req.move)
 
+				// 将此次走棋记录追加到房间历史（按顺序保存 from, to）
+				room.mu.Lock()
+				room.History = append(room.History, req.move.From)
+				room.History = append(room.History, req.move.To)
+				room.mu.Unlock()
+
 				// 交换当前玩家和下一个玩家
 				room.exchange()
 			case commandSendMessage:
@@ -230,6 +239,8 @@ func (ch *ChessHub) Run() {
 				next := startMessage{BaseMessage: BaseMessage{Type: messageStart}, Role: "black"}
 				room.Current.sendMessage(cur)
 				room.Next.sendMessage(next)
+				// 记录对局开始时间
+				room.StartTime = time.Now()
 				// 移除空余房间
 				ch.mu.Lock()
 				for i, r := range ch.spareRooms {
@@ -271,6 +282,9 @@ func (ch *ChessHub) Run() {
 				}
 				room.Current.sendMessage(endMsg)
 				room.Next.sendMessage(endMsg)
+				// 保存对局记录到数据库（在清理房间前保存）
+				// 保存对局记录（和棋）
+				saveGameRecord(room, roleNone)
 				room.clear()
 				delete(ch.Rooms, cmd.client.RoomId)
 			case commandHeartbeat:
@@ -818,4 +832,67 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 		}
 	}
 	return nil
+}
+
+// saveGameRecord 将房间数据持久化到数据库
+func saveGameRecord(room *ChessRoom, winner clientRole) {
+	if room == nil {
+		return
+	}
+
+	var redID uint
+	var blackID uint
+	// 根据 Client.Role 来确定红黑双方的用户ID
+	if room.Current != nil {
+		if room.Current.Role == roleRed {
+			redID = uint(room.Current.Id)
+		} else if room.Current.Role == roleBlack {
+			blackID = uint(room.Current.Id)
+		}
+	}
+	if room.Next != nil {
+		if room.Next.Role == roleRed {
+			redID = uint(room.Next.Id)
+		} else if room.Next.Role == roleBlack {
+			blackID = uint(room.Next.Id)
+		}
+	}
+
+	// 以紧凑数字串保存历史，例如: [{x:6,y:6},{x:6,y:5}] -> "6665"
+	room.mu.Lock()
+	historyCopy := make([]Position, len(room.History))
+	copy(historyCopy, room.History)
+	room.mu.Unlock()
+
+	var sb strings.Builder
+	for _, p := range historyCopy {
+		sb.WriteString(strconv.Itoa(p.X))
+		sb.WriteString(strconv.Itoa(p.Y))
+	}
+	historyStr := sb.String()
+
+	// 映射结果：0 = red win, 1 = black win, 2 = draw
+	result := 2
+	if winner == roleRed {
+		result = 0
+	} else if winner == roleBlack {
+		result = 1
+	} else {
+		result = 2
+	}
+
+	rec := recordModel.GameRecord{
+		RedID:     redID,
+		BlackID:   blackID,
+		StartTime: room.StartTime,
+		Result:    result,
+		History:   historyStr,
+		RedFlag:   false,
+		BlackFlag: false,
+		GameType:  0,
+	}
+
+	if err := database.GetMysqlDb().Create(&rec).Error; err != nil {
+		log.Printf("failed to save game record: %v", err)
+	}
 }
