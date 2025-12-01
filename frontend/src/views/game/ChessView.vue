@@ -4,6 +4,7 @@ import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ChatPanel from '@/components/ChatPanel.vue'
+import GameEndModal from '@/components/GameEndModal.vue'
 import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
@@ -27,6 +28,8 @@ const regretModalType = ref<'requesting' | 'responding'>('requesting')
 const gameOver = ref(false)
 const drawModalVisible = ref(false)
 const drawModalType = ref<'requesting' | 'responding'>('requesting')
+const endModalVisible = ref(false)
+const endResult = ref<'win' | 'lose' | 'draw' | null>(null)
 
 function handleRegretAccept() {
   if (gameOver.value) {
@@ -41,6 +44,7 @@ function handleRegretAccept() {
   showMsg(`悔了${steps}步棋`)
   chessBoard?.setCurrentRole('enemy')
   regretModalVisible.value = false
+  saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
 }
 
 function handleRegretReject() {
@@ -50,6 +54,7 @@ function handleRegretReject() {
   }
   ws.sendRegretResponse(false)
   regretModalVisible.value = false
+  saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
 }
 
 function handleDrawAccept() {
@@ -60,6 +65,7 @@ function handleDrawAccept() {
   ws.sendDrawResponse(true)
   // 接受和棋，后端会广播 GAME:END
   drawModalVisible.value = false
+  saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
 }
 
 function handleDrawReject() {
@@ -69,7 +75,20 @@ function handleDrawReject() {
   }
   ws.sendDrawResponse(false)
   drawModalVisible.value = false
+  saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
   showMsg('已拒绝对方的和棋请求')
+}
+
+function review() {
+  // 确保保存最新的局面到 sessionStorage
+  saveGameState({
+    isNetPlay: chessBoard.isNetworkPlay(),
+    selfColor: chessBoard.SelfColor,
+    moveHistory: chessBoard.moveHistoryList,
+    currentRole: chessBoard.currentRole,
+  })
+  clearModalState() // 退出时清除模态状态，防止下次进入时残留
+  router.push('/game/replay')
 }
 
 function decideSize(isPCBool: boolean) {
@@ -85,6 +104,14 @@ function giveUp() {
   if (gameOver.value) {
     showMsg('游戏已结束')
     return
+  }
+  if (networkPlay.value) {
+    ws?.giveUp()
+  }
+  else {
+    // 本地对局直接触发本地结束事件，胜者为对手
+    const opponentColor = chessBoard.SelfColor === 'red' ? 'black' : 'red'
+    channel.emit('GAME:END', { winner: opponentColor, online: false })
   }
 }
 
@@ -131,6 +158,7 @@ function regret() {
       ws.sendRegretRequest()
       regretModalType.value = 'requesting'
       regretModalVisible.value = true
+      saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
     }
     else {
       chessBoard.regretMove()
@@ -164,6 +192,7 @@ onMounted(() => {
     chessBoard.restoreState(savedState)
     console.log('Game state restored from localStorage')
   }
+
   // 恢复弹窗状态（若有）
   const modalState = getModalState()
   if (modalState) {
@@ -171,7 +200,20 @@ onMounted(() => {
     regretModalType.value = modalState.regretModalType || 'requesting'
     drawModalVisible.value = !!modalState.drawModalVisible
     drawModalType.value = modalState.drawModalType || 'requesting'
+    // 恢复结束模态（若之前为显示状态）
+    endModalVisible.value = !!modalState.endModalVisible
+    endResult.value = (modalState.endResult as any) || null
   }
+
+  // 新增：保存初始游戏状态
+  saveGameState({
+    isNetPlay: chessBoard.isNetworkPlay(),
+    selfColor: chessBoard.SelfColor,
+    moveHistory: chessBoard.moveHistoryList, // 初始为空
+    currentRole: chessBoard.currentRole,
+  })
+  // 清空消息队列
+  channel.clearQueue('NET:GAME:END')
   channel.on('NET:GAME:START', ({ color }) => {
     console.log('Game started, color:', color)
     chessBoard.stop()
@@ -185,10 +227,25 @@ onMounted(() => {
       moveHistory: chessBoard.moveHistoryList, // 初始为空
       currentRole: chessBoard.currentRole,
     })
+    // 清空消息队列
+    channel.clearQueue('NET:GAME:END')
   })
 
   // 处理服务端同步消息（重连时）
   channel.on('NET:GAME:SYNC', (data: any) => {
+    const { role, currentTurn, roomId } = data
+    // 如果服务端的 roomId 与当前客户端的 roomId 不匹配，忽略该 SYNC（可能是上局残留）
+    const currentRoom = ws.getCurrentRoomId && ws.getCurrentRoomId()
+    if (roomId !== undefined && currentRoom !== undefined && roomId !== currentRoom) {
+      console.log('Ignored NET:GAME:SYNC for different room', roomId, currentRoom)
+      return
+    }
+    // 如果本地保存的状态明确表示这是本地对局，则忽略服务端的 SYNC，避免错误切换到联机模式
+    const localSaved = getGameState()
+    if (localSaved && localSaved.isNetPlay === false) {
+      console.log('Ignoring NET:GAME:SYNC because local saved state indicates local play')
+      return
+    }
     // 以服务端为准，重新启动网络棋盘并尝试恢复本地保存的棋谱
     chessBoard.stop()
     chessBoard.start(role || 'red', true)
@@ -223,11 +280,13 @@ onMounted(() => {
     drawModalType.value = 'responding'
     drawModalVisible.value = true
     showMsg('对方请求和棋')
+    saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
   })
 
   channel.on('NET:DRAW:RESPONSE', (data: any) => {
     // 如果自己是请求方，收到响应时关闭请求模态
     drawModalVisible.value = false
+    saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
     if (data.accepted) {
       showMsg('对方同意和棋，局面以和棋结束')
       gameOver.value = true
@@ -238,6 +297,9 @@ onMounted(() => {
     }
   })
   channel.on('NET:GAME:END', ({ winner }) => {
+    if (chessBoard.isNetworkPlay() === false) {
+      return
+    }
     gameOver.value = true
     if (winner === 'red') {
       showMsg('红方胜利')
@@ -249,7 +311,30 @@ onMounted(() => {
       showMsg('和棋')
     }
     chessBoard?.disableInteraction()
+    // 保存游戏结束前的当前历史到 sessionStorage，以便复盘页面读取
+    saveGameState({
+      isNetPlay: chessBoard.isNetworkPlay(),
+      selfColor: chessBoard.SelfColor,
+      moveHistory: chessBoard.moveHistoryList,
+      currentRole: chessBoard.currentRole,
+    })
+    // 计算当前客户端对局结果
+    if (winner === 'draw') {
+      endResult.value = 'draw'
+    }
+    else {
+      const myColor = chessBoard.SelfColor
+      endResult.value = winner === myColor ? 'win' : 'lose'
+    }
+    endModalVisible.value = true
+    // 持久化结束模态，刷新后仍显示
+    saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
   })
+
+  channel.on('LOCAL:GAME:END', ({ winner }: any) => {
+    if (chessBoard.isNetworkPlay()) {
+      return
+    }
     gameOver.value = true
     if (winner === 'red') {
       showMsg('红方胜利')
@@ -267,10 +352,12 @@ onMounted(() => {
     regretModalType.value = 'responding'
     regretModalVisible.value = true
     showMsg('对方请求悔棋')
+    saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
   })
   // 监听悔棋响应
   channel.on('NET:CHESS:REGRET:RESPONSE', (data) => {
     regretModalVisible.value = false
+    saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
     if (data.accepted) {
       // 对方同意悔棋，执行悔棋操作
       const steps = chessBoard.isMyTurn() ? 2 : 1
@@ -293,6 +380,8 @@ onMounted(() => {
 })
 onUnmounted(() => {
   channel.off('NET:GAME:START')
+  channel.off('NET:GAME:END')
+  channel.off('LOCAL:GAME:END')
   channel.off('NET:CHESS:REGRET:REQUEST')
   channel.off('NET:CHESS:REGRET:RESPONSE')
   channel.off('NET:DRAW:REQUEST')
@@ -374,5 +463,12 @@ onUnmounted(() => {
     :on-accept="handleDrawAccept"
     :on-reject="handleDrawReject"
     @close="drawModalVisible = false"
+  />
+  <GameEndModal
+    :visible="endModalVisible"
+    :result="endResult"
+    :on-review="review"
+    :on-quit="quit"
+    @close="endModalVisible = false"
   />
 </template>
