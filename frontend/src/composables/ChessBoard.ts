@@ -197,16 +197,6 @@ class ChessBoard {
       // 安全容错，不阻塞游戏流程
       console.error('face-to-face check error', e)
     }
-
-    // // 切换回合
-    // this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
-    // // showMsg(`现在是${this.currentRole}的回合`)
-    // saveGameState({
-    //   isNetPlay: this.isNetPlay,
-    //   selfColor: this.selfColor,
-    //   moveHistory: this.moveHistory,
-    //   currentRole: this.currentRole,
-    // })
   }
 
   // 实际执行悔棋的方法
