@@ -24,17 +24,9 @@ const { userInfo } = storeToRefs(userStore)
           <router-link to="/room" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             大厅
           </router-link>
-
-          <!-- 修改点 1: 将 <a> 标签改为 <router-link> -->
-          <router-link
             v-if="userInfo?.name"
-            to="/profile"
             class="rounded-lg bg-[#e0e0e0] p-4 text-xl"
             hover="bg-[#b1aeae]"
-          >
-            {{ userInfo.name }}
-          </router-link>
-
           <RouterLink
             v-else
             to="/auth/login"
@@ -61,17 +53,9 @@ const { userInfo } = storeToRefs(userStore)
           <router-link to="/room" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             大厅
           </router-link>
-
-          <!-- 修改点 2: 同样，将移动端的 <a> 标签改为 <router-link> -->
-          <router-link
             v-if="userInfo?.name"
-            to="/profile"
             class="rounded-lg bg-[#e0e0e0] p-4 text-xl"
             hover="bg-[#b1aeae]"
-          >
-            {{ userInfo.name }}
-          </router-link>
-
           <RouterLink
             v-else
             to="/auth/login"

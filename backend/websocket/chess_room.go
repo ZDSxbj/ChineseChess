@@ -3,7 +3,6 @@ package websocket
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
 var (
@@ -17,7 +16,6 @@ type ChessRoom struct {
 	Current         *Client // 先进入房间的作为先手，默认为当前玩家
 	Next            *Client // 后进入房间的作为后手，默认为下一个玩家
 	History         []Position
-	StartTime       time.Time  // 记录对局开始时间
 	RegretRequester *Client    // 新增：记录悔棋请求发起方
 	mu              sync.Mutex // 保护History等共享资源
 }
@@ -27,12 +25,6 @@ func NewChessRoom() *ChessRoom {
 	defer idLock.Unlock()
 	nextId++
 	return &ChessRoom{
-		Id:        nextId,
-		Nums:      0,
-		Current:   nil,
-		Next:      nil,
-		History:   make([]Position, 0),
-		StartTime: time.Time{},
 	}
 }
 

@@ -139,34 +139,10 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 
 	if accepted {
 		// 同意悔棋：同步双方执行悔棋，更新房间历史记录
-		// 根据前端逻辑：
-		// - 如果悔棋请求方与当前要行子的一致（requester == room.Current），则需要移除两步记录，
-		//   悔棋后仍然轮到请求方走子；
-		// - 否则只移除一步记录，悔棋后轮到请求方走子。
 		room.mu.Lock()
-		// 重新计算请求方和对手（注意：requester 已在上方推断）
-		var opponent *Client
-		if room.Current == requester {
-			opponent = room.Next
-		} else {
-			opponent = room.Current
 		}
-
-		// 决定要移除的步数
-		toRemove := 2
-		if requester == room.Current {
-			toRemove = 4
-		}
-		for i := 0; i < toRemove && len(room.History) > 0; i++ {
-			room.History = room.History[:len(room.History)-1]
-		}
-
-		// 设置新的轮次：悔棋后应轮到请求方走子
-		room.Current = requester
-		room.Next = opponent
 		room.mu.Unlock()
 
-		// 通知请求方执行悔棋（前端会根据本地状态执行相应步数）
 		respMsg := RegretResponseMessage{
 			BaseMessage: BaseMessage{Type: messageRegretResponse},
 			Accepted:    true,

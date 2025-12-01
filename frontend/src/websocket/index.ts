@@ -269,16 +269,6 @@ export function useWebSocket(): WebSocketService {
         move(from, to)
       })
       channel.on('GAME:END', (data: any) => {
-        // data may contain { winner: 'red' | 'black', online: boolean }
-        const isOnline = data && typeof data.online === 'boolean' ? data.online : true
-        if (isOnline) {
-          if (data && (data as any).winner) {
-            end((data as any).winner)
-          }
-          else {
-            // fallback: send end without winner
-            end()
-          }
         }
       })
       // flush pending messages

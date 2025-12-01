@@ -60,9 +60,6 @@ export interface ModalState {
   regretModalType?: 'requesting' | 'responding'
   drawModalVisible?: boolean
   drawModalType?: 'requesting' | 'responding'
-  // 新增：游戏结束模态的可见性与结果，用于刷新后恢复
-  endModalVisible?: boolean
-  endResult?: 'win' | 'lose' | 'draw' | null
 }
 
 const MODAL_STATE_KEY = 'chess_modal_state'
