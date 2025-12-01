@@ -53,6 +53,139 @@ class ChessBoard {
     return this.moveHistory.length
   }
 
+  // 检测指定颜色的将/帅是否被将军
+  private isInCheck(color: ChessColor): boolean {
+    // 找到该颜色的将/帅
+    let king: { piece: ChessPiece, pos: ChessPosition } | null = null
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const piece = this.board[x][y]
+        if (piece && piece instanceof King && piece.color === color) {
+          king = { piece, pos: { x, y } }
+          break
+        }
+      }
+      if (king) break
+    }
+    if (!king) return false
+
+    // 首先检查将帅是否碰面（同列且中间无棋子）
+    const enemyColor = color === 'red' ? 'black' : 'red'
+    let enemyKing: { piece: ChessPiece, pos: ChessPosition } | null = null
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const piece = this.board[x][y]
+        if (piece && piece instanceof King && piece.color === enemyColor) {
+          enemyKing = { piece, pos: { x, y } }
+          break
+        }
+      }
+      if (enemyKing) break
+    }
+
+    // 如果找到对方的将/帅，检查是否碰面
+    if (enemyKing && king.pos.x === enemyKing.pos.x) {
+      let blocked = false
+      for (let yi = Math.min(king.pos.y, enemyKing.pos.y) + 1; yi < Math.max(king.pos.y, enemyKing.pos.y); yi++) {
+        if (this.board[king.pos.x][yi]) {
+          blocked = true
+          break
+        }
+      }
+      // 如果将帅在同一列且中间无棋子，则被将军
+      if (!blocked) {
+        return true
+      }
+    }
+
+    // 检查所有对方棋子是否能攻击到这个将/帅
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const piece = this.board[x][y]
+        if (piece && piece.color === enemyColor) {
+          // 检查这个敌方棋子能否移动到将/帅的位置
+          if (piece.isMoveValid(king.pos, this.board)) {
+            return true
+          }
+        }
+      }
+    }
+    return false
+  }
+
+  // 检测指定颜色是否可以通过任何合法移动解除将军
+  private canEscapeCheck(color: ChessColor): boolean {
+    // 遍历所有己方棋子，尝试所有可能的移动
+    for (let fromX = 0; fromX <= 8; fromX++) {
+      for (let fromY = 0; fromY <= 9; fromY++) {
+        const piece = this.board[fromX][fromY]
+        if (!piece || piece.color !== color) continue
+
+        // 尝试所有可能的目标位置
+        for (let toX = 0; toX <= 8; toX++) {
+          for (let toY = 0; toY <= 9; toY++) {
+            const targetPiece = this.board[toX][toY]
+            // 不能吃自己的子
+            if (targetPiece && targetPiece.color === color) continue
+
+            // 检查这步棋是否合法
+            if (!piece.isMoveValid({ x: toX, y: toY }, this.board)) continue
+
+            // 模拟这步棋
+            const savedPiece = this.board[toX][toY]
+            delete this.board[fromX][fromY]
+            this.board[toX][toY] = piece
+            const savedPos = { ...piece.position }
+            piece.position = { x: toX, y: toY }
+
+            // 检查移动后是否还在将军状态
+            const stillInCheck = this.isInCheck(color)
+
+            // 恢复棋盘状态
+            piece.position = savedPos
+            this.board[fromX][fromY] = piece
+            if (savedPiece) {
+              this.board[toX][toY] = savedPiece
+            } else {
+              delete this.board[toX][toY]
+            }
+
+            // 如果这步棋能解除将军，返回true
+            if (!stillInCheck) {
+              return true
+            }
+          }
+        }
+      }
+    }
+    return false
+  }
+
+  // 检测指定颜色是否被将死
+  private isCheckmate(color: ChessColor): boolean {
+    return this.isInCheck(color) && !this.canEscapeCheck(color)
+  }
+
+  // 检查当前回合方是否被将死，如果是则结束游戏
+  private checkCurrentTurnCheckmate() {
+    // 联机模式下由服务端/对手走子触发判定，本地模式才需要主动检测
+    if (this.isNetPlay) return false
+    // 确定当前回合应该走棋的颜色
+    const enemyColor = this.selfColor === 'red' ? 'black' : 'red'
+    const currentColor = this.currentRole === 'self' ? this.selfColor : enemyColor
+    
+    if (this.isCheckmate(currentColor)) {
+      // 当前回合方被将死，对方获胜
+      const winner = currentColor === 'red' ? 'black' : 'red'
+      showMsg(`${currentColor === 'red' ? '红方' : '黑方'}被将死！`)
+      // 本地对战：仅通知本地 UI
+      channel.emit('LOCAL:GAME:END', { winner })
+      this.end(winner)
+      return true
+    }
+    return false
+  }
+
   get width(): number {
     return this.gridSize * 9
   }
@@ -74,6 +207,11 @@ class ChessBoard {
   }
 
   private clickHandler(event: MouseEvent) {
+    // 在允许任何操作前，检查当前回合方是否已被将死
+    if (this.checkCurrentTurnCheckmate()) {
+      return
+    }
+
     const rect = this.chessesElement.getBoundingClientRect()
     const x = Math.floor((event.clientX - rect.left) / this.gridSize)
     const y = Math.floor((event.clientY - rect.top) / this.gridSize)
@@ -117,13 +255,40 @@ class ChessBoard {
       return
     }
 
+    // 防止自吃（特别是联机从网络通道直接触发时）
+    if (targetPiece && targetPiece.color === piece.color) {
+      return
+    }
+
     if (!piece.isMoveValid(to, this.board)) {
       return
     }
     // 先在数据结构上应用移动（模拟新的棋盘状态），再绘制
+
+    // 模拟移动，检查是否会导致自己被将军
+    const savedPiece = this.board[to.x][to.y]
+    const originalPos = { ...piece.position }
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
-    piece.move(to)
+    // 仅修改内存位置用于判定，不进行绘制
+    piece.position = to
+
+    const wouldBeInCheck = this.isInCheck(piece.color)
+
+    // 恢复棋盘状态
+    piece.position = originalPos
+    this.board[from.x][from.y] = piece
+    if (savedPiece) {
+      this.board[to.x][to.y] = savedPiece
+    } else {
+      delete this.board[to.x][to.y]
+    }
+
+    // 如果移动后自己会被将军，则不允许这步棋
+    if (wouldBeInCheck) {
+      showMsg('不能送将！')
+      return
+    }
     // 记录历史
     this.moveHistory.push({
       from: { ...from },
@@ -131,10 +296,49 @@ class ChessBoard {
       capturedPiece: targetPiece || null,
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
     })
+
+    // 先在数据结构上应用移动（模拟新的棋盘状态），再绘制
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
+    piece.move(to)
+
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
     }
+
+    // 检查对方是否被将军或将死
+    const opponentColor = piece.color === 'red' ? 'black' : 'red'
+    const opponentInCheck = this.isInCheck(opponentColor)
+    const opponentCheckmated = opponentInCheck && this.isCheckmate(opponentColor)
+
+    if (opponentCheckmated) {
+      // 对方被将死，移动方获胜
+      const moverColor = piece.color
+      if (this.isNetPlay) {
+        channel.emit('GAME:END', { winner: moverColor, online: true })
+      } else {
+        channel.emit('LOCAL:GAME:END', { winner: moverColor })
+      }
+      this.end(moverColor)
+      return
+    } else if (opponentInCheck) {
+      // 对方被将军，显示提示
+      showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
+    }
+
+    // 如果直接吃掉对方的将，立即判定结束（移动方胜）
+    if (targetPiece && targetPiece instanceof King) {
+      const moverColor = piece.color
+      if (this.isNetPlay) {
+        channel.emit('GAME:END', { winner: moverColor, online: true })
+      } else {
+        channel.emit('LOCAL:GAME:END', { winner: moverColor })
+      }
+      this.end(moverColor)
+      return
+    }
+
     // 切换回合
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     // showMsg(`现在是${this.currentRole}的回合`)
@@ -145,57 +349,12 @@ class ChessBoard {
       currentRole: this.currentRole,
     })
 
-    // 如果直接吃掉对方的将，立即判定结束（移动方胜）
-    if (targetPiece) {
-      if (targetPiece instanceof King) {
-        const moverColor = piece.color
-        channel.emit('GAME:END', { winner: moverColor, online: this.isNetPlay })
-        if (!this.isNetPlay) {
-          channel.emit('LOCAL:GAME:END', { winner: moverColor })
-        }
-        this.end(moverColor)
-        return
-      }
-    }
-
-    // 检查将帅是否相对（同一列且中间无棋子）——若相对则移动方胜
-    try {
-      const kings: { x: number, y: number, piece: ChessPiece }[] = []
-      for (let xi = 0; xi <= 8; xi++) {
-        for (let yi = 0; yi <= 9; yi++) {
-          const p = this.board[xi][yi]
-          if (p && p instanceof King) {
-            kings.push({ x: xi, y: yi, piece: p })
-          }
-        }
-      }
-      if (kings.length === 2) {
-        const k1 = kings[0]
-        const k2 = kings[1]
-        if (k1.x === k2.x) {
-          let blocked = false
-          for (let yi = Math.min(k1.y, k2.y) + 1; yi < Math.max(k1.y, k2.y); yi++) {
-            if (this.board[k1.x][yi]) {
-              blocked = true
-              break
-            }
-          }
-          if (!blocked) {
-            // 将帅相对时，移动方落败，对方胜
-            const opponentColor = piece.color === 'red' ? 'black' : 'red'
-            channel.emit('GAME:END', { winner: opponentColor, online: this.isNetPlay })
-            if (!this.isNetPlay) {
-              channel.emit('LOCAL:GAME:END', { winner: opponentColor })
-            }
-            this.end(opponentColor)
-            return
-          }
-        }
-      }
-    }
-    catch (e) {
-      // 安全容错，不阻塞游戏流程
-      console.error('face-to-face check error', e)
+    // 在本地模式下，切换回合后立即检查新回合方是否被将死
+    // 使用 setTimeout 确保棋盘 UI 更新后再检查
+    if (!this.isNetPlay) {
+      setTimeout(() => {
+        this.checkCurrentTurnCheckmate()
+      }, 10)
     }
   }
 
