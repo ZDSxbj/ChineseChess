@@ -839,6 +839,16 @@ func saveGameRecord(room *ChessRoom, winner clientRole) {
 		return
 	}
 
+	// 避免重复保存：如果已经保存过则直接返回
+	room.mu.Lock()
+	if room.RecordSaved {
+		room.mu.Unlock()
+		return
+	}
+	// 标记为已保存，防止并发或重复调用导致多次写入
+	room.RecordSaved = true
+	room.mu.Unlock()
+
 	var redID uint
 	var blackID uint
 	// 根据 Client.Role 来确定红黑双方的用户ID
@@ -858,15 +868,29 @@ func saveGameRecord(room *ChessRoom, winner clientRole) {
 	}
 
 	// 以紧凑数字串保存历史，例如: [{x:6,y:6},{x:6,y:5}] -> "6665"
+	// 注意：room.History 中保存的位置是按移动者视角记录的（客户端未统一坐标），
+	// 因此这里将历史规范化为统一的“红方视角”再保存：如果某一步的移动者为黑方，则翻转坐标 (x->8-x, y->9-y)
 	room.mu.Lock()
 	historyCopy := make([]Position, len(room.History))
 	copy(historyCopy, room.History)
 	room.mu.Unlock()
 
+	// 将按移动对对（from,to）处理，假设红方先手
 	var sb strings.Builder
-	for _, p := range historyCopy {
-		sb.WriteString(strconv.Itoa(p.X))
-		sb.WriteString(strconv.Itoa(p.Y))
+	for i := 0; i+1 < len(historyCopy); i += 2 {
+		// moveIdx: 0 表示第一手（红方），1 表示第二手（黑方），以此类推
+		moveIdx := i / 2
+		moverIsBlack := (moveIdx%2 == 1)
+		from := historyCopy[i]
+		to := historyCopy[i+1]
+		if moverIsBlack {
+			from = Position{X: 8 - from.X, Y: 9 - from.Y}
+			to = Position{X: 8 - to.X, Y: 9 - to.Y}
+		}
+		sb.WriteString(strconv.Itoa(from.X))
+		sb.WriteString(strconv.Itoa(from.Y))
+		sb.WriteString(strconv.Itoa(to.X))
+		sb.WriteString(strconv.Itoa(to.Y))
 	}
 	historyStr := sb.String()
 

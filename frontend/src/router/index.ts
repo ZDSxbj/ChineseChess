@@ -26,12 +26,16 @@ const router = createRouter({
           component: () => import('../views/default/RoomView.vue'),
         },
         // 个人主页路由（带登录校验）
-        { 
-          path: 'profile', 
-          name: 'profile', 
-          component: () => import('../views/profile/ProfileHub.vue'), 
+        {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('../views/profile/ProfileHub.vue'),
           meta: { requiresAuth: true }, // 必须登录才能访问
           children: [
+            {
+              path: '',
+              redirect: 'info',
+            },
             {
               path: 'info', // 子路由，个人信息
               name: 'profile-info',
@@ -41,6 +45,11 @@ const router = createRouter({
               path: 'records', // 子路由，行棋记录
               name: 'profile-records',
               component: () => import('../views/profile/GameRecords.vue') // 指向行棋记录页
+            },
+            {
+              path: 'replay/:recordId', // 子路由，对局复盘
+              name: 'profile-replay',
+              component: () => import('../views/profile/RecordReplay.vue') // 指向复盘页
             }
           ]
         }

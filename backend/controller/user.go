@@ -3,9 +3,9 @@ package controller
 import (
 	"github.com/gin-gonic/gin"
 
-	"chinese-chess-backend/service"
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/user"
+	"chinese-chess-backend/service"
 )
 
 type UserController struct {
@@ -44,6 +44,23 @@ func (uc *UserController) Login(c *gin.Context) {
 	}
 
 	resp, err := uc.userService.Login(&req)
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+	dto.SuccessResponse(c, dto.WithData(resp))
+}
+
+func (uc *UserController) GetGameRecords(c *gin.Context) {
+	// 从 token 中获取当前登录用户ID
+	userID, exists := c.Get("userId")
+	if !exists {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+
+	req := &user.GetGameRecordsRequest{UserID: userID.(int)}
+	resp, err := uc.userService.GetGameRecords(req)
 	if err != nil {
 		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
 		return

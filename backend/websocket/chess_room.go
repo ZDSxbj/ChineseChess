@@ -19,6 +19,7 @@ type ChessRoom struct {
 	History         []Position
 	StartTime       time.Time  // 记录对局开始时间
 	RegretRequester *Client    // 新增：记录悔棋请求发起方
+	RecordSaved     bool       // 标记对局记录是否已保存，防止重复保存
 	mu              sync.Mutex // 保护History等共享资源
 }
 
@@ -27,12 +28,13 @@ func NewChessRoom() *ChessRoom {
 	defer idLock.Unlock()
 	nextId++
 	return &ChessRoom{
-		Id:        nextId,
-		Nums:      0,
-		Current:   nil,
-		Next:      nil,
-		History:   make([]Position, 0),
-		StartTime: time.Time{},
+		Id:          nextId,
+		Nums:        0,
+		Current:     nil,
+		Next:        nil,
+		History:     make([]Position, 0),
+		StartTime:   time.Time{},
+		RecordSaved: false,
 	}
 }
 

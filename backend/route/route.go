@@ -57,9 +57,12 @@ func SetupRouter() *gin.Engine {
 	publicRoute.POST("/send-code", user.SendVCode)
 
 	userRoute := api.Group("/user")
+	userRoute.GET("/profile", user.GetUserProfile)
+	userRoute.PUT("/profile", user.UpdateUserProfile)
 
 	hub := websocket.NewChessHub()
 	userRoute.POST("/rooms", hub.GetSpareRooms, room.GetSpareRooms)
+	userRoute.GET("/game-records", user.GetGameRecords)
 	r.GET("/ws", hub.HandleConnection)
 	go hub.Run()
 
