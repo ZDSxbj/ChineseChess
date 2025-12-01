@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { showMsg } from '@/components/MessageBox'
 import ChessBoard from '@/composables/ChessBoard'
 import { clearGameState, getGameState } from '@/store/gameStore'
-import channel from '@/utils/channel'
 
 const router = useRouter()
 const background = ref<HTMLCanvasElement | null>(null)
@@ -15,16 +14,21 @@ const hist = ref<any[]>([])
 const index = ref(0)
 
 function applySteps(n: number) {
-  if (!chessBoard) return
+  if (!chessBoard) {
+    return
+  }
   const saved = getGameState()
-  if (!saved) return
+  if (!saved) {
+    return
+  }
   // 复位棋盘
   chessBoard.stop()
   chessBoard.start(saved.selfColor, false)
   // 逐步回放
   for (let i = 0; i < n; i++) {
     const step = hist.value[i]
-    channel.emit('NET:CHESS:MOVE', { from: step.from, to: step.to })
+    // 使用复盘专用的移动函数，仅改变棋盘状态并绘制，不触发其他逻辑
+    chessBoard.replayMove(step.from, step.to)
   }
   chessBoard.disableInteraction()
 }
@@ -40,19 +44,23 @@ function onRestart() {
 }
 
 function onPrev() {
-  if (index.value <= 0) return
+  if (index.value <= 0) {
+    return
+  }
   index.value--
   applySteps(index.value)
 }
 
 function onNext() {
   const max = hist.value.length
-  if (index.value >= max) return
+  if (index.value >= max) {
+    return
+  }
   index.value++
   applySteps(index.value)
 }
 function handlePopState(_event: PopStateEvent) {
-  window.history.pushState(null, '', window.location.href)
+  globalThis.history.pushState(null, '', globalThis.location.href)
   showMsg('请通过应用内的导航按钮进行操作')
 }
 
@@ -77,16 +85,16 @@ onMounted(() => {
   hist.value = saved.moveHistory || []
   index.value = hist.value.length // 默认到最后一步
   applySteps(index.value)
-  window.history.pushState(null, '', window.location.href)
+  globalThis.history.pushState(null, '', globalThis.location.href)
   // 监听 popstate 事件，防止后退操作
-  window.addEventListener('popstate', (event) => {
+  globalThis.addEventListener('popstate', (event) => {
     handlePopState(event)
   })
 })
 
 onUnmounted(() => {
   chessBoard?.stop()
-  window.removeEventListener('popstate', handlePopState)
+  globalThis.removeEventListener('popstate', handlePopState)
 })
 </script>
 

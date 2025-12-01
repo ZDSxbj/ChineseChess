@@ -324,6 +324,20 @@ class ChessBoard {
     this.listenEvent()
   }
 
+  // 专门用于复盘时执行的移动（只改变棋盘状态和绘制，不触发网络事件或胜负判定、回合切换等）
+  public replayMove(from: ChessPosition, to: ChessPosition) {
+    const piece = this.board[from.x][from.y]
+    if (!piece) {
+      return
+    }
+    // 处理被吃棋子（复盘时我们只是覆盖位置即可）
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
+    piece.move(to)
+    // 只负责绘制，不修改历史、回合或触发事件
+    this.drawChesses()
+  }
+
   public stop() {
     this.chessesElement.removeEventListener('click', this.clickCallback)
     this.clear()

@@ -22,8 +22,8 @@ func (us *UserService) Register(req *dto.RegisterRequest) (dto.RegisterResponse,
 	var err error
 
 	user := userModel.User{
-		Name:     req.Name,
-		Email:    req.Email,
+		Name:  req.Name,
+		Email: req.Email,
 	}
 
 	// 校验邮箱是否已注册
@@ -105,7 +105,7 @@ func (us *UserService) SendVCode(req *dto.SendVCodeRequest) error {
 	}
 
 	// 存储验证码到数据库
-	err = database.SetValue(req.Email, code, time.Minute * 5)
+	err = database.SetValue(req.Email, code, time.Minute*5)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,42 @@ func (uc *UserService) GetUserInfo(req *dto.GetUserInfoRequest) (*dto.GetUserInf
 		return nil, errors.New("用户不存在")
 	}
 
-	userInfoResp.Name = user.Name
+	userInfoResp.UserInfo = dto.UserInfo{
+		ID:         user.ID,
+		Name:       user.Name,
+		Email:      user.Email,
+		Exp:        user.Exp,
+		Avatar:     user.Avatar,
+		Gender:     user.Gender,
+		TotalGames: user.TotalGames,
+		WinRate:    user.WinRate,
+	}
 
 	return &userInfoResp, nil
+}
+
+func (us *UserService) UpdateUserInfo(userID int, req *dto.UpdateUserRequest) error {
+	db := database.GetMysqlDb()
+	var user userModel.User
+
+	// 查询用户是否存在
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+
+	// 更新字段（只更新非空字段）
+	if req.Name != "" {
+		user.Name = req.Name
+	}
+	if req.Gender != "" {
+		user.Gender = req.Gender
+	}
+	if req.Email != "" {
+		user.Email = req.Email
+	}
+	if req.Avatar != "" {
+		user.Avatar = req.Avatar
+	}
+
+	return db.Save(&user).Error
 }
