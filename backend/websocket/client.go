@@ -172,6 +172,10 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 			Accepted:    true,
 		}
 		requester.sendMessage(respMsg)
+		if room.Current == responder {
+			room.Current = requester
+			room.Next = responder
+		}
 	} else {
 		// 拒绝悔棋：仅通知请求方
 		requester.sendMessage(RegretResponseMessage{
