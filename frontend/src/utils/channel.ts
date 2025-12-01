@@ -7,10 +7,6 @@ interface GameEvents {
   }
   'GAME:END': {
     winner: color
-    online?: boolean
-  }
-  'LOCAL:GAME:END': {
-    winner: color
   }
   'NET:GAME:START': {
     color: color
@@ -88,13 +84,6 @@ class Channel {
       return
     }
     this.listeners[eventName](req)
-  }
-
-  // 新增：清空指定事件的队列
-  clearQueue(eventName: keyof GameEvents) {
-    if (this.eventsQueue[eventName]) {
-      this.eventsQueue[eventName] = []
-    }
   }
 }
 
