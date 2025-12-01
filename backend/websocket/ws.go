@@ -3,8 +3,6 @@ package websocket
 import (
 	"fmt"
 	"log"
-	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,7 +18,7 @@ import (
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/room"
 	dtouser "chinese-chess-backend/dto/user"
-	recordModel "chinese-chess-backend/model/record"
+	
 	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/utils"
 	"slices"
@@ -85,6 +83,10 @@ func (ch *ChessHub) Run() {
 				ch.mu.Unlock()
 				// 在线用户
 				database.SetValue(fmt.Sprint(client.Id), "a", 0)
+				// 将在线状态写入 MySQL
+				if err := database.GetMysqlDb().Model(&modeluser.User{}).Where("id = ?", client.Id).Update("online", true).Error; err != nil {
+					// 不阻塞主流程，记录或忽略错误
+				}
 			case commandUnregister:
 				client := cmd.client
 				roomId := client.RoomId
@@ -119,6 +121,10 @@ func (ch *ChessHub) Run() {
 				ch.mu.Lock()
 				// 从 Clients 中移除
 				if _, ok := ch.Clients[client.Id]; ok {
+					// 更新在线状态为 false
+					if err := database.GetMysqlDb().Model(&modeluser.User{}).Where("id = ?", client.Id).Update("online", false).Error; err != nil {
+						// 忽略错误
+					}
 					delete(ch.Clients, client.Id)
 					if client.Conn != nil {
 						client.Conn.Close()
@@ -499,6 +505,11 @@ func (ch *ChessHub) HandleConnection(c *gin.Context) {
 		existing.Username = user.Name
 		client = existing
 
+		// 更新在线状态为 true（重连成功）
+		if err := database.GetMysqlDb().Model(&modeluser.User{}).Where("id = ?", id).Update("online", true).Error; err != nil {
+			// 忽略错误
+		}
+
 		// 关键：检查房间是否还存在
 		// 若房间已被清理（定时器到期导致的结果），则重置玩家状态为"在线"
 		_, roomExists := ch.Rooms[client.RoomId]
@@ -833,89 +844,3 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 	return nil
 }
 
-// saveGameRecord 将房间数据持久化到数据库
-func saveGameRecord(room *ChessRoom, winner clientRole) {
-	if room == nil {
-		return
-	}
-
-	// 避免重复保存：如果已经保存过则直接返回
-	room.mu.Lock()
-	if room.RecordSaved {
-		room.mu.Unlock()
-		return
-	}
-	// 标记为已保存，防止并发或重复调用导致多次写入
-	room.RecordSaved = true
-	room.mu.Unlock()
-
-	var redID uint
-	var blackID uint
-	// 根据 Client.Role 来确定红黑双方的用户ID
-	if room.Current != nil {
-		if room.Current.Role == roleRed {
-			redID = uint(room.Current.Id)
-		} else if room.Current.Role == roleBlack {
-			blackID = uint(room.Current.Id)
-		}
-	}
-	if room.Next != nil {
-		if room.Next.Role == roleRed {
-			redID = uint(room.Next.Id)
-		} else if room.Next.Role == roleBlack {
-			blackID = uint(room.Next.Id)
-		}
-	}
-
-	// 以紧凑数字串保存历史，例如: [{x:6,y:6},{x:6,y:5}] -> "6665"
-	// 注意：room.History 中保存的位置是按移动者视角记录的（客户端未统一坐标），
-	// 因此这里将历史规范化为统一的“红方视角”再保存：如果某一步的移动者为黑方，则翻转坐标 (x->8-x, y->9-y)
-	room.mu.Lock()
-	historyCopy := make([]Position, len(room.History))
-	copy(historyCopy, room.History)
-	room.mu.Unlock()
-
-	// 将按移动对对（from,to）处理，假设红方先手
-	var sb strings.Builder
-	for i := 0; i+1 < len(historyCopy); i += 2 {
-		// moveIdx: 0 表示第一手（红方），1 表示第二手（黑方），以此类推
-		moveIdx := i / 2
-		moverIsBlack := (moveIdx%2 == 1)
-		from := historyCopy[i]
-		to := historyCopy[i+1]
-		if moverIsBlack {
-			from = Position{X: 8 - from.X, Y: 9 - from.Y}
-			to = Position{X: 8 - to.X, Y: 9 - to.Y}
-		}
-		sb.WriteString(strconv.Itoa(from.X))
-		sb.WriteString(strconv.Itoa(from.Y))
-		sb.WriteString(strconv.Itoa(to.X))
-		sb.WriteString(strconv.Itoa(to.Y))
-	}
-	historyStr := sb.String()
-
-	// 映射结果：0 = red win, 1 = black win, 2 = draw
-	result := 2
-	if winner == roleRed {
-		result = 0
-	} else if winner == roleBlack {
-		result = 1
-	} else {
-		result = 2
-	}
-
-	rec := recordModel.GameRecord{
-		RedID:     redID,
-		BlackID:   blackID,
-		StartTime: room.StartTime,
-		Result:    result,
-		History:   historyStr,
-		RedFlag:   false,
-		BlackFlag: false,
-		GameType:  0,
-	}
-
-	if err := database.GetMysqlDb().Create(&rec).Error; err != nil {
-		log.Printf("failed to save game record: %v", err)
-	}
-}

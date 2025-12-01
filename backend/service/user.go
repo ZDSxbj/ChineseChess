@@ -90,6 +90,12 @@ func (us *UserService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) 
 	loginResp.Token = token
 	loginResp.Name = user.Name
 
+	// 更新在线状态为 true
+	if err := db.Model(&user).Update("online", true).Error; err != nil {
+		// 不阻塞登录流程，但记录错误
+		// 可以改为返回错误以强制要求成功写入在线状态
+	}
+
 	return &loginResp, nil
 }
 
@@ -243,7 +249,7 @@ func (us *UserService) GetGameRecords(req *dto.GetGameRecordsRequest) (*dto.GetG
 		// 1) 如果 history 是 JSON 格式：可能是 moves 数组（每项包含 from/to）或 positions 数组（每项为 {x,y}）
 		// 2) 如果 history 是紧凑数字字符串（如 "6665" 表示 (6,6)->(6,5)），则按字符解析
 		totalSteps := 0
-		
+
 		hs := record.History
 		l := len(hs)
 		if l >= 4 {
