@@ -168,6 +168,8 @@ class ChessBoard {
 
   // 检查当前回合方是否被将死，如果是则结束游戏
   private checkCurrentTurnCheckmate() {
+    // 联机模式下由服务端/对手走子触发判定，本地模式才需要主动检测
+    if (this.isNetPlay) return false
     // 确定当前回合应该走棋的颜色
     const enemyColor = this.selfColor === 'red' ? 'black' : 'red'
     const currentColor = this.currentRole === 'self' ? this.selfColor : enemyColor
@@ -176,7 +178,8 @@ class ChessBoard {
       // 当前回合方被将死，对方获胜
       const winner = currentColor === 'red' ? 'black' : 'red'
       showMsg(`${currentColor === 'red' ? '红方' : '黑方'}被将死！`)
-      channel.emit('GAME:END', { winner })
+      // 本地对战：仅通知本地 UI
+      channel.emit('LOCAL:GAME:END', { winner })
       this.end(winner)
       return true
     }
@@ -252,6 +255,11 @@ class ChessBoard {
       return
     }
 
+    // 防止自吃（特别是联机从网络通道直接触发时）
+    if (targetPiece && targetPiece.color === piece.color) {
+      return
+    }
+
     if (!piece.isMoveValid(to, this.board)) {
       return
     }
@@ -259,16 +267,16 @@ class ChessBoard {
 
     // 模拟移动，检查是否会导致自己被将军
     const savedPiece = this.board[to.x][to.y]
+    const originalPos = { ...piece.position }
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
-    piece.move(to)
-    const savedPos = { ...piece.position }
+    // 仅修改内存位置用于判定，不进行绘制
     piece.position = to
 
     const wouldBeInCheck = this.isInCheck(piece.color)
 
     // 恢复棋盘状态
-    piece.position = savedPos
+    piece.position = originalPos
     this.board[from.x][from.y] = piece
     if (savedPiece) {
       this.board[to.x][to.y] = savedPiece
@@ -307,7 +315,11 @@ class ChessBoard {
     if (opponentCheckmated) {
       // 对方被将死，移动方获胜
       const moverColor = piece.color
-      channel.emit('GAME:END', { winner: moverColor })
+      if (this.isNetPlay) {
+        channel.emit('GAME:END', { winner: moverColor, online: true })
+      } else {
+        channel.emit('LOCAL:GAME:END', { winner: moverColor })
+      }
       this.end(moverColor)
       return
     } else if (opponentInCheck) {
@@ -318,7 +330,11 @@ class ChessBoard {
     // 如果直接吃掉对方的将，立即判定结束（移动方胜）
     if (targetPiece && targetPiece instanceof King) {
       const moverColor = piece.color
-      channel.emit('GAME:END', { winner: moverColor })
+      if (this.isNetPlay) {
+        channel.emit('GAME:END', { winner: moverColor, online: true })
+      } else {
+        channel.emit('LOCAL:GAME:END', { winner: moverColor })
+      }
       this.end(moverColor)
       return
     }

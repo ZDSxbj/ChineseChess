@@ -282,9 +282,8 @@ func (ch *ChessHub) Run() {
 				}
 				room.Current.sendMessage(endMsg)
 				room.Next.sendMessage(endMsg)
-				// 保存对局记录到数据库（在清理房间前保存）
-				// 保存对局记录（和棋）
-				saveGameRecord(room, roleNone)
+				// 保存对局记录到数据库（在清理房间前保存），按实际赢家记录
+				saveGameRecord(room, winner)
 				room.clear()
 				delete(ch.Rooms, cmd.client.RoomId)
 			case commandHeartbeat:
