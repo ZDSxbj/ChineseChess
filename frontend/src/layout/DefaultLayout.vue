@@ -24,6 +24,9 @@ const { userInfo } = storeToRefs(userStore)
           <router-link to="/room" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             大厅
           </router-link>
+          <router-link to="/social" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
+            社交
+          </router-link>
 
           <!-- 修改点 1: 将 <a> 标签改为 <router-link> -->
           <router-link

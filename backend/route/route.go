@@ -45,6 +45,7 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.AuthMiddleware())
 
 	user := controller.NewUserController(service.NewUserService())
+	friend := controller.NewFriendController(service.NewFriendService())
 	room := controller.NewRoomController(service.NewRoomService())
 	// 设置路由组
 	api := r.Group("/api")
@@ -59,6 +60,8 @@ func SetupRouter() *gin.Engine {
 	userRoute := api.Group("/user")
 	userRoute.GET("/profile", user.GetUserProfile)
 	userRoute.PUT("/profile", user.UpdateUserProfile)
+	userRoute.GET("/friends", friend.GetFriends)
+	userRoute.DELETE("/friends/:friendId", friend.DeleteFriend)
 
 	hub := websocket.NewChessHub()
 	userRoute.POST("/rooms", hub.GetSpareRooms, room.GetSpareRooms)
