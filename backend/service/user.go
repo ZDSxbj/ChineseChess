@@ -7,6 +7,8 @@ import (
 	"chinese-chess-backend/utils"
 	"time"
 
+	"gorm.io/gorm" // 新增gorm包导入
+
 	"errors"
 )
 
@@ -149,6 +151,13 @@ func (us *UserService) UpdateUserInfo(userID int, req *dto.UpdateUserRequest) er
 
 	// 更新字段（只更新非空字段）
 	if req.Name != "" {
+		var count int64
+		db.Model(&userModel.User{}).
+			Where("name = ? AND id <> ?", req.Name, userID).
+			Count(&count)
+		if count > 0 {
+			return errors.New("该id已被注册")
+		}
 		user.Name = req.Name
 	}
 	if req.Gender != "" {
@@ -161,5 +170,33 @@ func (us *UserService) UpdateUserInfo(userID int, req *dto.UpdateUserRequest) er
 		user.Avatar = req.Avatar
 	}
 
+	return db.Save(&user).Error
+}
+
+func (us *UserService) UpdateEmailWithCode(userID int, email string, code string) error {
+	// 新增：检查邮箱是否已被其他用户使用
+	db := database.GetMysqlDb()
+	var existingUser userModel.User
+	if err := db.Where("email = ? AND id != ?", email, userID).First(&existingUser).Error; err == nil {
+		return errors.New("该邮箱已存在")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// 处理数据库查询错误
+		return errors.New("检查邮箱失败")
+	}
+	// 校验验证码
+	realCode, err := database.GetValue(email)
+	if err != nil {
+		return errors.New("验证码错误或已过期")
+	}
+	if realCode != code {
+		return errors.New("验证码错误")
+	}
+
+	// 修改邮箱
+	var user userModel.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	user.Email = email
 	return db.Save(&user).Error
 }

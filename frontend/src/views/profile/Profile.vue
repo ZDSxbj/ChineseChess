@@ -71,13 +71,40 @@
           <button type="button" class="edit-arrow" @click="startEditing('email')">›</button>
         </div>
         <div v-if="editingField === 'email'" class="edit-input">
-          <input type="email" class="form-control" v-model="tempValue" placeholder="请输入邮箱" />
+          <input type="email" class="form-control" v-model="newEmail" placeholder="请输入邮箱" />
           <div class="field-actions">
-            <button type="button" class="btn-save" @click="saveEdit('email')">保存</button>
+            <button type="button" class="btn-save" :disabled="isSendingCode" @click="sendCode">
+              <span v-if="!isSendingCode">发送验证码</span>
+              <span v-else>{{ sendCountdown > 0 ? sendCountdown + 's' : '发送中...' }}</span>
+            </button>
             <button type="button" class="btn-cancel" @click="cancelEdit()">取消</button>
           </div>
         </div>
       </div>
+
+    <div v-if="showEmailVerifyModal" class="modal-overlay">
+      <div class="modal-box">
+        <p class="modal-text">请输入收到的验证码，已发送到：{{ newEmail }}</p>
+        <input type="text" class="form-control" v-model="verifyCodeInput" placeholder="请输入验证码" />
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="closeVerifyModal">取消</button>
+          <button class="btn btn-danger" :disabled="isVerifying" @click="confirmVerify">
+            <span v-if="!isVerifying">确认</span>
+            <span v-else>验证中...</span>
+          </button>
+        </div>
+        <p v-if="verifyError" style="color:#d9534f;margin-top:8px">{{ verifyError }}</p>
+      </div>
+    </div>
+
+    <div v-if="showEmailError" class="modal-overlay">
+      <div class="modal-box">
+        <p class="modal-text">{{ emailErrorMsg }}</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showEmailError = false">确定</button>
+        </div>
+      </div>
+    </div>
 
       <!-- 经验值（只读，不可编辑） -->
       <div class="form-group">
@@ -104,13 +131,46 @@
       </div>
 
       <div class="form-actions">
-        <button type="button" class="btn btn-secondary" @click="logout">退出登录</button>
+       <button type="button" class="btn btn-secondary" @click="promptLogout">退出登录</button>
         <button type="button" class="btn btn-danger" @click="deleteAccount" :disabled="isProcessing">
           <span v-if="!isProcessing">注销账号</span>
           <span v-else>处理中...</span>
         </button>
       </div>
     </form>
+
+    <!-- 页面内退出确认弹窗 -->
+      <div v-if="showLogoutConfirm" class="modal-overlay">
+       <div class="modal-box">
+          <p class="modal-text">确定要退出登录吗？</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" @click="cancelLogout">取消</button>
+            <button class="btn btn-danger" @click="logout">确定</button>
+         </div>
+        </div>
+      </div>
+    <!-- 保存成功提示弹窗 -->
+      <div v-if="showSaveSuccess" class="modal-overlay">
+      <div class="modal-box">
+        <p class="modal-text">保存成功</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="closeSaveModal">确定</button>
+        </div>
+      </div>
+    </div>
+
+      <div v-if="showDeleteConfirm" class="modal-overlay">
+      <div class="modal-box">
+        <p class="modal-text">确定要注销账号吗？注销后所有个人数据将被删除，且无法恢复！</p>
+        <div class="modal-actions">
+          <button button class="btn btn-secondary" @click="showDeleteConfirm = false">取消</button>
+          <button class="btn btn-danger" @click="confirmDeleteAccount" :disabled="isProcessing">
+            <span v-if="!isProcessing">确定</span>
+            <span v-else>处理中...</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -118,8 +178,11 @@
 import { ref, onMounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/useStore';
+import RequestHandler from '@/api/useRequest'; 
 import { getProfile } from '@/api/user/getProfile';
 import { updateProfile } from '@/api/user/updateProfile';
+import { sendCode as sendEmailCode } from '@/api/user/send_code'
+import { updateEmail } from '@/api/user/updateEmail'
 
 // 路由实例
 const router = useRouter();
@@ -130,6 +193,14 @@ const userStore = useUserStore();
 const isLoading = ref(true);
 const hasError = ref(false);
 const isProcessing = ref(false); // 处理状态（用于注销账号）
+
+const showLogoutConfirm = ref(false);
+const showSaveSuccess = ref(false);
+const showEmailError = ref(false);
+const emailErrorMsg = ref('');
+const showDeleteConfirm = ref(false);
+const closeSaveModal = () => { showSaveSuccess.value = false };
+
 
 // 表单数据，添加总场次和胜率字段
 const formData = reactive<any>({
@@ -145,6 +216,15 @@ const formData = reactive<any>({
 // 编辑状态与临时值（避免直接修改 formData）
 const editingField = ref<string | null>(null);
 const tempValue = ref<any>(null);
+
+const newEmail = ref<string>('');
+const verifyCodeInput  = ref<string>('');
+const showEmailVerifyModal = ref<boolean>(false);
+const isSendingCode = ref<boolean>(false);
+const sendCountdown = ref<number>(0);
+let countdownTimer: number | null = null;
+const isVerifying = ref<boolean>(false);
+const verifyError = ref<string | null>(null);
 
 /**
  * @description: 初始化表单数据（从 API 获取）
@@ -193,35 +273,148 @@ const initForm = async () => {
 
 /* 编辑相关 */
 const startEditing = (key: string) => {
-  // 仅允许编辑非数值字段（name/gender/email）
   if (key === 'exp' || key === 'totalGames' || key === 'winRate') return;
   editingField.value = key;
-  // 复制当前显示值，取消不影响原值
   tempValue.value = formData[key];
+  if (key === 'email') {
+    newEmail.value = formData.email || '';
+    verifyCodeInput.value = '';
+    verifyError.value = null;
+  }
 };
 
 const cancelEdit = () => {
   editingField.value = null;
   tempValue.value = null;
+  newEmail.value = '';
+  verifyCodeInput.value = '';
+  showEmailVerifyModal.value = false;
+  isSendingCode.value = false;
+  sendCountdown.value = 0;
+  verifyError.value = null;
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+};
+
+const sendCode = async () => {
+  const email = (newEmail.value || '').trim();
+  const emailPattern = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  if (!emailPattern.test(email)) {
+    emailErrorMsg.value = '请输入有效邮箱';
+    showEmailError.value = true;
+    return;
+  }
+
+  try {
+    isSendingCode.value = true;
+    await sendEmailCode({ email });
+    showEmailVerifyModal.value = true;
+    sendCountdown.value = 60;
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = window.setInterval(() => {
+      sendCountdown.value -= 1;
+      if (sendCountdown.value <= 0 && countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        isSendingCode.value = false;
+      }
+    }, 1000);
+  } catch (err) {
+    emailErrorMsg.value = '验证码发送失败，请稍后重试';
+    showEmailError.value = true;
+    isSendingCode.value = false;
+  }
+};
+
+// 关闭验证码弹窗（可返回重新输入邮箱）
+const closeVerifyModal = () => {
+  showEmailVerifyModal.value = false;
+  verifyCodeInput.value = '';
+  verifyError.value = null;
+  // 允许重新发送
+  isSendingCode.value = false;
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; sendCountdown.value = 0; }
+};
+
+// 确认验证码并更新邮箱：先调用后端验证接口 -> 验证通过再调用 updateProfile 更新
+const confirmVerify = async () => {
+  const code = (verifyCodeInput.value || '').trim();
+  const email = (newEmail.value || '').trim();
+  if (!code) {
+    verifyError.value = '请输入验证码';
+    return;
+  }
+
+  try {
+    isVerifying.value = true;
+    verifyError.value = null;
+
+    // 一次性提交邮箱和验证码，由后端校验并修改
+    const resp = await updateEmail({ email, code });
+    const respData = (resp as any)?.data ?? resp;
+    const ok = !respData?.msg || respData?.msg === '修改成功';
+
+    if (!ok) {
+      if (respData?.msg === '该邮箱已存在') {
+        verifyError.value = '该邮箱已存在';
+      } else {
+        verifyError.value = respData?.msg || '验证码错误或已过期';
+      }
+      isVerifying.value = false;
+      return;
+    }
+
+    // 成功后更新本地显示
+    formData.email = email;
+    editingField.value = null;
+    showEmailVerifyModal.value = false;
+    showSaveSuccess.value = true;
+
+    // 清理
+    newEmail.value = '';
+    verifyCodeInput.value = '';
+    isVerifying.value = false;
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; sendCountdown.value = 0; isSendingCode.value = false; }
+  } catch (err) {
+    console.error('确认验证码或更新邮箱失败:', err);
+    if (err?.response?.data?.msg === '该邮箱已存在') {
+      verifyError.value = '该邮箱已存在';
+    } else {
+      verifyError.value = '验证失败，请重试';
+    }
+    isVerifying.value = false;
+  }
 };
 
 const saveEdit = async (key: string) => {
-  // 简单校验示例
+  // 如果是邮箱，走验证码流程：先把 tempValue 的值同步到 newEmail（兼容性）
+  if (key === 'email') {
+    newEmail.value = ((tempValue.value ?? newEmail.value) as string).trim();
+    if (!newEmail.value) {
+      emailErrorMsg.value = '请输入新的邮箱';
+      showEmailError.value = true;
+      return;
+    }
+    // 发验证码（sendCode 内会检查邮箱是否存在并弹窗处理）
+    await sendCode();
+    return;
+  }
+
+  // 简单校验示例（其他字段）
   if ((key === 'winRate' || key === 'exp' || key === 'totalGames') && (tempValue.value === '' || tempValue.value == null || isNaN(Number(tempValue.value)))) {
     alert('请输入有效数值');
     return;
   }
   try {
-    // 调用更新API
     await updateProfile({ [key]: tempValue.value });
-    // 更新本地显示
     formData[key] = tempValue.value;
     editingField.value = null;
     tempValue.value = null;
-    alert('保存成功');
-  } catch (error) {
-    console.error('更新失败:', error);
-    alert('保存失败，请重试');
+    showSaveSuccess.value = true;
+  } catch (error: any) {
+    // 判断是否为“该id已被注册”
+    const msg = error?.response?.data?.msg || error?.message || '保存失败，请重试';
+    emailErrorMsg.value = msg;
+    showEmailError.value = true;
   }
 };
 
@@ -240,36 +433,54 @@ const handleAvatarChange = (e: Event) => {
 /**
  * @description: 退出登录
  */
-const logout = () => {
-  if (confirm('确定要退出登录吗？')) {
-    userStore.logout();
-    router.push('/auth/login');
+const logout = async () => {
+  showLogoutConfirm.value = false;
+
+  try {
+    // 尝试调用 store.logout，如果类型定义缺失则安全回退（as any）
+    await (userStore as any).logout?.();
+
+    // 额外确保本地存储的 token/userInfo 被清理（以防 store 未实现）
+    try { localStorage.removeItem('token'); } catch {}
+    try { localStorage.removeItem('userInfo'); } catch {}
+
+    // 使用 replace 防止用户按后退回到已登录页面
+    await router.replace('/auth/login');
+  } catch (e) {
+    console.error('退出登录失败:', e);
+    // 即便出错也跳转到登录页，确保用户被登出视图层面
+    await router.replace('/auth/login');
   }
 };
+
+const promptLogout = () => { showLogoutConfirm.value = true; };
+const cancelLogout = () => { showLogoutConfirm.value = false; };
+
 
 /**
  * @description: 注销账号
  */
-const deleteAccount = async () => {
-  if (!confirm('警告：注销账号将删除所有个人数据，且无法恢复！确定要注销吗？')) {
-    return;
-  }
+const deleteAccount = () => {
+  showDeleteConfirm.value = true;
+};
 
+const confirmDeleteAccount = async () => {
+  isProcessing.value = true;
   try {
-    isProcessing.value = true;
-
-    // TODO: 替换为真实的注销账号 API 调用
-    setTimeout(() => {
-      userStore.logout(); // 清除登录状态
-      alert('账号已成功注销');
-      router.push('/auth/login'); // 跳转到登录页
-      isProcessing.value = false;
-    }, 1500);
-
+    // 调用后端注销接口
+    await RequestHandler.post('/user/delete_account');
+    // 清除本地登录信息
+    userStore.logout?.();
+    localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
+    // 跳转到登录页
+    await router.replace('/auth/login');
   } catch (error) {
-    console.error('注销账号失败:', error);
-    alert('注销失败，请稍后重试');
+    emailErrorMsg.value = '注销失败，请稍后重试';
+    showEmailError.value = true;
+  } finally {
     isProcessing.value = false;
+    showDeleteConfirm.value = false;
   }
 };
 
@@ -435,4 +646,34 @@ onMounted(() => {
   background-color: #ffb4b4;
   cursor: not-allowed;
 }
+
+.modal-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-box{
+  width: 320px;
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  text-align: center;
+}
+.modal-text{
+  margin-bottom: 16px;
+  color: #333;
+  font-size: 16px;
+}
+.modal-actions{
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.edit-input input.form-control { max-width: 420px; }
+.modal-box input.form-control { margin: 8px 0 0; }
 </style>
