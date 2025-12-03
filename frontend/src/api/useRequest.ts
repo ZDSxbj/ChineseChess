@@ -26,7 +26,11 @@ instance.interceptors.request.use((config) => {
   }
   // 获取token操作
   const { token } = useUserStore()
-  config.headers.Authorization = `Bearer ${token}`
+  // token 是一个 computed ref，取 .value 才是实际字符串
+  const tokenValue = (token && typeof (token as any).value !== 'undefined') ? (token as any).value : token
+  if (tokenValue) {
+    config.headers.Authorization = `Bearer ${tokenValue}`
+  }
   return config
 })
 

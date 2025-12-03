@@ -3,6 +3,8 @@
 import type { ChessColor, ChessPiece, ChessRole } from '@/composables/ChessPiece'
 import type { ChessPosition } from '@/composables/ChessPiece'
 
+export type { ChessColor, ChessPiece, ChessRole } from '@/composables/ChessPiece'
+
 // 定义游戏状态类型（无需修改）
 export interface GameState {
   isNetPlay: boolean

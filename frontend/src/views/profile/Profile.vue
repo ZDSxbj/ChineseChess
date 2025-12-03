@@ -646,7 +646,6 @@ onMounted(() => {
   background-color: #ffb4b4;
   cursor: not-allowed;
 }
-
 .modal-overlay{
   position: fixed;
   inset: 0;

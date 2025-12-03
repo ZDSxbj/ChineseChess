@@ -172,6 +172,10 @@ func (ch *ChessHub) handleRegretResponse(responder *Client, accepted bool) {
 			Accepted:    true,
 		}
 		requester.sendMessage(respMsg)
+		if room.Current == responder {
+			room.Current = requester
+			room.Next = responder
+		}
 	} else {
 		// 拒绝悔棋：仅通知请求方
 		requester.sendMessage(RegretResponseMessage{
@@ -251,16 +255,11 @@ func (ch *ChessHub) handleDrawResponse(responder *Client, accepted bool) {
 	requester.sendMessage(respMsg)
 
 	if accepted {
-		// 若同意，发送结束消息（和棋, winner = roleNone）给双方并清理房间
-		endMsg := endMessage{
-			BaseMessage: BaseMessage{Type: messageEnd},
-			Winner:      roleNone,
+		// 若同意，统一交由 commandEnd 处理（负责通知双方、持久化与清理）
+		ch.commands <- hubCommand{
+			commandType: commandEnd,
+			client:      requester,
+			payload:     roleNone,
 		}
-		room.Current.sendMessage(endMsg)
-		room.Next.sendMessage(endMsg)
-		room.clear()
-		ch.mu.Lock()
-		delete(ch.Rooms, requester.RoomId)
-		ch.mu.Unlock()
 	}
 }
