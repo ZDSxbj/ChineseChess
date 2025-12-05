@@ -127,7 +127,15 @@ func (uc *UserService) GetUserInfo(req *dto.GetUserInfoRequest) (*dto.GetUserInf
 	// 查询用户
 	db := database.GetMysqlDb()
 	user := userModel.User{}
-	if err = db.Where("id = ?", req.Id).First(&user).Error; err != nil {
+
+	query := db
+	if req.Id > 0 {
+		query = query.Where("id = ?", req.Id)
+	} else if req.Name != "" {
+		query = query.Where("name = ?", req.Name)
+	}
+
+	if err = query.First(&user).Error; err != nil {
 		return nil, errors.New("用户不存在")
 	}
 

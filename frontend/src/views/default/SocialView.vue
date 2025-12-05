@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 import type { ChatMessage } from '@/api/user/chat'
 import type { FriendItem } from '@/api/user/social'
+import type { UserInfo } from '@/api/user/user'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getMessages, markRead, sendMessage } from '@/api/user/chat'
 import { deleteFriend, getFriends } from '@/api/user/social'
+import { getUserInfo } from '@/api/user/get_info'
 import FriendCard from '@/components/FriendCard.vue'
 // channel handling is centralized in social store
 import { useUserStore } from '@/store/useStore'
@@ -12,6 +14,12 @@ import { useSocialStore } from '@/store/useSocialStore'
 const friends = ref<FriendItem[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+// Search state
+const isSearchExpanded = ref(false)
+const searchQuery = ref('')
+const searchResult = ref<UserInfo | null>(null)
+const searchStatus = ref<'idle' | 'searching' | 'found' | 'not-found' | 'self' | 'error'>('idle')
 
 const selectedFriendId = ref<number | null>(null)
 const messages = ref<ChatMessage[]>([])
@@ -99,6 +107,48 @@ async function sendCurrentMessage() {
 // context menu state
 const contextMenu = ref<{ visible: boolean, x: number, y: number, id: number | null }>({ visible: false, x: 0, y: 0, id: null })
 const confirmDeleteId = ref<number | null>(null)
+
+function toggleSearch() {
+  isSearchExpanded.value = !isSearchExpanded.value
+  if (!isSearchExpanded.value) {
+    clearSearch()
+  }
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  searchResult.value = null
+  searchStatus.value = 'idle'
+}
+
+async function performSearch() {
+  const name = searchQuery.value.trim()
+  if (!name) return
+
+  // Reset selection and active chat when searching
+  selectedFriendId.value = null
+  try { socialStore.setActiveRelationId(null) } catch { /* ignore */ }
+
+  if (name === userStore.userInfo?.name) {
+    searchStatus.value = 'self'
+    searchResult.value = null
+    return
+  }
+
+  searchStatus.value = 'searching'
+  searchResult.value = null
+
+  try {
+    const resp = await getUserInfo({ name })
+    searchResult.value = resp as unknown as UserInfo
+    searchStatus.value = 'found'
+  } catch (e) {
+    searchStatus.value = 'not-found'
+  }
+}function handleAddFriend() {
+  // TODO: Implement add friend logic
+  alert('添加好友功能尚未实现')
+}
 
 let pollTimer: number | undefined
 
@@ -269,26 +319,98 @@ onBeforeUnmount(() => {
   <div class="h-full flex bg-gray-50">
     <!-- 左侧好友列表 -->
     <aside class="w-96 border-r bg-white flex flex-col shadow-sm z-10">
-      <div class="p-5 border-b bg-gray-50/50 backdrop-blur-sm sticky top-0 z-10">
+      <div class="p-5 border-b bg-gray-50/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <h2 class="text-xl font-bold text-gray-800">好友列表</h2>
+        <div class="flex items-center gap-2">
+          <div v-if="isSearchExpanded" class="flex items-center gap-2 animate-fade-in-right">
+            <input
+              v-model="searchQuery"
+              @keyup.enter="performSearch"
+              type="text"
+              placeholder="输入用户名搜索"
+              class="px-3 py-1 text-sm border rounded-full focus:outline-none focus:border-blue-500 transition-all w-40"
+            />
+            <button @click="performSearch" class="bg-transparent border-none outline-none p-1 text-gray-500 hover:text-blue-500 transition-colors cursor-pointer flex items-center justify-center" title="搜索">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </button>
+            <button @click="toggleSearch" class="bg-transparent border-none outline-none p-1 text-gray-500 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center" title="关闭">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+          <button v-else @click="toggleSearch" class="bg-transparent border-none outline-none p-1 text-gray-500 hover:text-blue-500 transition-colors cursor-pointer flex items-center justify-center" title="搜索好友">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </button>
+        </div>
       </div>
+
       <div class="flex-1 overflow-y-auto custom-scrollbar">
-        <div v-if="loading" class="p-8 text-center text-gray-500 animate-pulse">加载中...</div>
-        <div v-if="error" class="p-8 text-center text-red-500 bg-red-50 m-4 rounded-lg">{{ error }}</div>
-        <div v-if="!loading && friends.length === 0" class="p-12 text-center text-gray-400 flex flex-col items-center gap-3">
-          <div class="i-carbon-user-multiple text-4xl opacity-50"></div>
-          <span>暂无好友</span>
-        </div>
-        <div class="divide-y divide-gray-50">
-          <FriendCard
-            v-for="f in friends"
-            :key="f.id"
-            :friend="f"
-            :selected="selectedFriendId === f.id"
-            @select="onSelectFriend"
-            @context="openContextMenu"
-          />
-        </div>
+        <!-- Search Results -->
+        <template v-if="isSearchExpanded && searchStatus !== 'idle'">
+          <div v-if="searchStatus === 'searching'" class="p-8 text-center text-gray-500 animate-pulse">搜索中...</div>
+          <div v-else-if="searchStatus === 'not-found'" class="p-8 text-center text-gray-500">未找到该用户</div>
+          <div v-else-if="searchStatus === 'self'" class="p-8 text-center text-gray-500">不能搜索自己</div>
+          <div v-else-if="searchStatus === 'found' && searchResult" class="divide-y divide-gray-50">
+            <!-- Check if friend -->
+            <template v-if="friends.some(f => f.id === searchResult!.id)">
+              <FriendCard
+                :friend="friends.find(f => f.id === searchResult!.id)!"
+                :selected="selectedFriendId === searchResult!.id"
+                @select="onSelectFriend"
+                @context="openContextMenu"
+              />
+            </template>
+            <template v-else>
+              <!-- Non-friend card -->
+              <div class="flex items-center gap-4 p-4 bg-white border-b border-gray-100">
+                <img
+                  :src="searchResult.avatar || defaultAvatar"
+                  alt="avatar"
+                  class="w-14 h-14 rounded-full object-cover border border-gray-200 shadow-sm"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <h3 class="text-base font-semibold text-gray-800 truncate">{{ searchResult.name }}</h3>
+                      <div v-if="searchResult.gender === '男'" class="i-carbon-gender-male text-blue-500 text-lg" title="男"></div>
+                      <div v-else-if="searchResult.gender === '女'" class="i-carbon-gender-female text-pink-500 text-lg" title="女"></div>
+                      <div v-else-if="searchResult.gender === '其他'" class="i-carbon-help text-gray-400 text-lg" title="其他"></div>
+                    </div>
+                    <!-- Add Button -->
+                    <button @click="handleAddFriend" class="px-3 py-1 text-xs text-white bg-blue-500 rounded-full hover:bg-blue-600 transition-colors">
+                      添加
+                    </button>
+                  </div>
+
+                  <div class="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
+                    <span>场次: {{ searchResult.totalGames }}</span>
+                    <span>胜率: {{ (searchResult.winRate * 100).toFixed(1) }}%</span>
+                  </div>
+                  <div class="text-xs text-gray-400 mt-0.5">经验: {{ searchResult.exp }}</div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Friend List -->
+        <template v-else>
+          <div v-if="loading" class="p-8 text-center text-gray-500 animate-pulse">加载中...</div>
+          <div v-if="error" class="p-8 text-center text-red-500 bg-red-50 m-4 rounded-lg">{{ error }}</div>
+          <div v-if="!loading && friends.length === 0" class="p-12 text-center text-gray-400 flex flex-col items-center gap-3">
+            <div class="i-carbon-user-multiple text-4xl opacity-50"></div>
+            <span>暂无好友</span>
+          </div>
+          <div class="divide-y divide-gray-50">
+            <FriendCard
+              v-for="f in friends"
+              :key="f.id"
+              :friend="f"
+              :selected="selectedFriendId === f.id"
+              @select="onSelectFriend"
+              @context="openContextMenu"
+            />
+          </div>
+        </template>
       </div>
     </aside>
 
