@@ -33,6 +33,10 @@ interface WebSocketMessage {
   accepted?: boolean // 用于悔棋响应的布尔值字段
   content?: string // 聊天消息内容
   sender?: string // 聊天消息发送者
+  relationId?: number
+  senderId?: number
+  messageId?: number
+  createdAt?: number
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -151,10 +155,10 @@ export function useWebSocket(): WebSocketService {
         break
       }
       case MessageType.ChatMessage: {
-        // 处理聊天消息
-        const { sender, content } = data
-        if (sender && content) {
-          channel.emit('NET:CHAT:MESSAGE', { sender, content })
+        // 处理聊天消息，尽量使用 relationId/senderId 做精确路由
+        const { sender, content, relationId, senderId, messageId, createdAt } = data as any
+        if (content) {
+          channel.emit('NET:CHAT:MESSAGE', { sender, content, relationId, senderId, messageId, createdAt })
         }
         break
       }

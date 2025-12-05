@@ -2,9 +2,18 @@
 import { Icon } from '@iconify/vue/dist/iconify.js'
 import { storeToRefs } from 'pinia'
 import { useUserStore } from '@/store/useStore'
+import { useSocialStore } from '@/store/useSocialStore'
+import { onMounted } from 'vue'
 
 const userStore = useUserStore()
 const { userInfo } = storeToRefs(userStore)
+const socialStore = useSocialStore()
+const { totalUnread } = storeToRefs(socialStore)
+
+onMounted(() => {
+  // 初始化 social store，使其在全局订阅消息并计算初始未读数
+  try { socialStore.init() } catch { /* ignore */ }
+})
 </script>
 
 <template>
@@ -25,7 +34,10 @@ const { userInfo } = storeToRefs(userStore)
             大厅
           </router-link>
           <router-link to="/social" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
-            社交
+            <span class="inline-flex items-center gap-2">
+              <span>社交</span>
+              <span v-if="totalUnread && totalUnread > 0" class="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-semibold rounded-full px-2 py-0.5">{{ totalUnread > 99 ? '99+' : totalUnread }}</span>
+            </span>
           </router-link>
 
           <!-- 修改点 1: 将 <a> 标签改为 <router-link> -->
@@ -65,6 +77,13 @@ const { userInfo } = storeToRefs(userStore)
             大厅
           </router-link>
 
+          <router-link to="/social" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
+            <span class="inline-flex items-center gap-2">
+              <span>社交</span>
+              <span v-if="totalUnread && totalUnread > 0" class="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-semibold rounded-full px-2 py-0.5">{{ totalUnread > 99 ? '99+' : totalUnread }}</span>
+            </span>
+          </router-link>
+
           <!-- 修改点 2: 同样，将移动端的 <a> 标签改为 <router-link> -->
           <router-link
             v-if="userInfo?.name"
@@ -86,6 +105,8 @@ const { userInfo } = storeToRefs(userStore)
         </div>
       </nav>
     </header>
-    <RouterView />
+    <main class="flex-1 overflow-hidden flex flex-col">
+      <RouterView />
+    </main>
   </div>
 </template>

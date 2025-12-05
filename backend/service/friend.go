@@ -22,18 +22,18 @@ func (fs *FriendService) ListFriends(userID int) (*dto.GetFriendsResponse, error
 		return nil, errors.New("查询好友失败")
 	}
 
-	// 收集好友 id
-	friendIDsMap := make(map[uint]struct{})
+	// map otherUserID -> relationID
+	otherToRelation := make(map[uint]uint)
 	for _, r := range relations {
 		if int(r.UserID) == userID {
-			friendIDsMap[r.FriendID] = struct{}{}
+			otherToRelation[r.FriendID] = r.ID
 		} else {
-			friendIDsMap[r.UserID] = struct{}{}
+			otherToRelation[r.UserID] = r.ID
 		}
 	}
 
 	var friendIDs []uint
-	for id := range friendIDsMap {
+	for id := range otherToRelation {
 		friendIDs = append(friendIDs, id)
 	}
 
@@ -44,17 +44,28 @@ func (fs *FriendService) ListFriends(userID int) (*dto.GetFriendsResponse, error
 		}
 	}
 
+	// 获取未读统计
+	chatSvc := NewChatService()
+	unreadMap, _ := chatSvc.GetUnreadCounts(uint(userID))
+
 	resp := &dto.GetFriendsResponse{Friends: make([]dto.FriendItem, 0, len(users))}
 	for _, u := range users {
+		rel := otherToRelation[u.ID]
+		uc := int64(0)
+		if v, ok := unreadMap[rel]; ok {
+			uc = v
+		}
 		resp.Friends = append(resp.Friends, dto.FriendItem{
-			ID:         u.ID,
-			Name:       u.Name,
-			Avatar:     u.Avatar,
-			Online:     u.Online,
-			Gender:     u.Gender,
-			Exp:        u.Exp,
-			TotalGames: u.TotalGames,
-			WinRate:    u.WinRate,
+			ID:          u.ID,
+			RelationID:  rel,
+			Name:        u.Name,
+			Avatar:      u.Avatar,
+			Online:      u.Online,
+			Gender:      u.Gender,
+			Exp:         u.Exp,
+			TotalGames:  u.TotalGames,
+			WinRate:     u.WinRate,
+			UnreadCount: uc,
 		})
 	}
 

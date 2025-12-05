@@ -43,6 +43,10 @@ interface GameEvents {
   'NET:CHAT:MESSAGE': {
     sender: string
     content: string
+    relationId?: number
+    senderId?: number
+    messageId?: number
+    createdAt?: number
   }
 }
 
@@ -50,44 +54,60 @@ type Listener<T> = (req: T) => void
 
 class Channel {
   private eventsQueue: {
-    [K in keyof GameEvents]: Array<GameEvents[K]>
+    [K in keyof GameEvents]?: Array<GameEvents[K]>
   } = {} as {
-    [K in keyof GameEvents]: Array<GameEvents[K]>
+    [K in keyof GameEvents]?: Array<GameEvents[K]>
   }
 
   private listeners: {
-    [K in keyof GameEvents]?: Listener<GameEvents[K]>
+    [K in keyof GameEvents]?: Set<Listener<GameEvents[K]>>
   } = {}
 
   on<K extends keyof GameEvents>(eventName: K, listener: Listener<GameEvents[K]>) {
     if (!this.eventsQueue[eventName]) {
       this.eventsQueue[eventName] = []
     }
-    this.listeners[eventName] = listener as Listener<GameEvents[keyof GameEvents]>
-    while (this.eventsQueue[eventName]?.length) {
-      const req = this.eventsQueue[eventName].shift()
-      if (req === undefined) {
-        continue
-      }
-      listener(req)
+    if (!this.listeners[eventName]) {
+      this.listeners[eventName] = new Set<Listener<GameEvents[K]>>() as Set<Listener<GameEvents[keyof GameEvents]>>
+    }
+    this.listeners[eventName]!.add(listener as Listener<GameEvents[keyof GameEvents]>)
+    // drain queued events and deliver to this new listener
+    const queue = this.eventsQueue[eventName] || []
+    while (queue.length) {
+      const req = queue.shift()
+      if (req === undefined) continue
+      try { listener(req) } catch { /* ignore listener errors */ }
     }
   }
 
-  off(eventName: keyof GameEvents) {
-    if (!this.listeners[eventName])
+  off<K extends keyof GameEvents>(eventName: K, listener?: Listener<GameEvents[K]>) {
+    const set = this.listeners[eventName]
+    if (!set)
       return
-    delete this.listeners[eventName]
+    if (listener === undefined) {
+      // remove all listeners for this event
+      delete this.listeners[eventName]
+      return
+    }
+    set.delete(listener as Listener<GameEvents[keyof GameEvents]>)
+    if (set.size === 0) {
+      delete this.listeners[eventName]
+    }
   }
 
   emit<K extends keyof GameEvents>(eventName: K, req: GameEvents[K]) {
-    if (!this.listeners[eventName]) {
+    const set = this.listeners[eventName]
+    if (!set || set.size === 0) {
       if (!this.eventsQueue[eventName]) {
         this.eventsQueue[eventName] = []
       }
-      this.eventsQueue[eventName].push(req)
+      this.eventsQueue[eventName]!.push(req)
       return
     }
-    this.listeners[eventName](req)
+    // call all listeners
+    for (const l of Array.from(set)) {
+      try { l(req) } catch { /* ignore listener errors */ }
+    }
   }
 
   // 新增：清空指定事件的队列

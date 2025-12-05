@@ -2,6 +2,7 @@ import Request from '@/api/useRequest'
 
 export interface FriendItem {
   id: number
+  relationId?: number
   name: string
   avatar: string
   online: boolean
@@ -9,12 +10,13 @@ export interface FriendItem {
   exp: number
   totalGames: number
   winRate: number
+  unreadCount?: number
 }
 
-export const getFriends = async (): Promise<{ friends: FriendItem[] }> => {
+export async function getFriends(): Promise<{ friends: FriendItem[] }> {
   return Request.get('/user/friends')
 }
 
-export const deleteFriend = async (friendId: number) => {
+export async function deleteFriend(friendId: number) {
   return Request.delete(`/user/friends/${friendId}`)
 }

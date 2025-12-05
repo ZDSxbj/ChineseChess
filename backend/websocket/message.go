@@ -68,8 +68,12 @@ type DrawResponseMessage struct {
 
 type ChatMessage struct {
 	BaseMessage
-	Content string `json:"content"`
-	Sender  string `json:"sender"`
+	Content    string `json:"content"`
+	Sender     string `json:"sender"`
+	RelationId uint   `json:"relationId,omitempty"`
+	SenderId   uint   `json:"senderId,omitempty"`
+	MessageId  uint   `json:"messageId,omitempty"`
+	CreatedAt  int64  `json:"createdAt,omitempty"`
 }
 
 // SyncMessage 用于在玩家重连时将房间当前的棋步历史、玩家角色和当前轮次同步给客户端
