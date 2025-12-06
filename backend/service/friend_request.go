@@ -68,11 +68,11 @@ func (frs *FriendRequestService) DeleteByID(id uint) error {
 }
 
 // Accept a friend request: create friend relation, remove request, and return relationID
-func (frs *FriendRequestService) AcceptRequest(reqID uint) (uint, error) {
+func (frs *FriendRequestService) AcceptRequest(reqID uint) (uint, uint, error) {
 	db := database.GetMysqlDb()
 	var req frModel.FriendRequest
 	if err := db.First(&req, reqID).Error; err != nil {
-		return 0, errors.New("好友申请不存在")
+		return 0, 0, errors.New("好友申请不存在")
 	}
 	// create friend relation (single row)
 	relation := &friendModel.Friend{
@@ -80,13 +80,13 @@ func (frs *FriendRequestService) AcceptRequest(reqID uint) (uint, error) {
 		FriendID: req.ReceiverID,
 	}
 	if err := db.Create(relation).Error; err != nil {
-		return 0, errors.New("创建好友关系失败")
+		return 0, 0, errors.New("创建好友关系失败")
 	}
 	// delete request
 	if err := db.Delete(&frModel.FriendRequest{}, reqID).Error; err != nil {
 		// non-fatal
 	}
-	return relation.ID, nil
+	return relation.ID, req.SenderID, nil
 }
 
 // Exists checks whether a friend request from sender to receiver already exists

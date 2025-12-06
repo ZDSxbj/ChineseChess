@@ -6,8 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"chinese-chess-backend/database"
 	dto "chinese-chess-backend/dto"
 	"chinese-chess-backend/service"
+	"chinese-chess-backend/websocket"
 )
 
 type FriendController struct {
@@ -98,4 +100,80 @@ func (fc *FriendController) CheckFriendRequest(c *gin.Context) {
 		return
 	}
 	dto.SuccessResponse(c, dto.WithData(gin.H{"exists": existsFlag}))
+}
+
+// AcceptFriendRequest accepts an incoming friend request (create relation, delete request, send greeting)
+func (fc *FriendController) AcceptFriendRequest(c *gin.Context) {
+	uid, exists := c.Get("userId")
+	if !exists {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+	userID := uid.(int)
+
+	idStr := c.Param("id")
+	id64, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("非法的请求ID"))
+		return
+	}
+	reqID := uint(id64)
+
+	// Accept request (create relation) and get relation id and sender id
+	relationID, senderID, err := fc.frService.AcceptRequest(reqID)
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+
+	// Send a greeting message from accepter to sender and persist it
+	chatSvc := service.NewChatService()
+	greeting := "你好，我是...，我们一起聊天和下棋吧！"
+	// try to derive current user's name
+	var uname struct{ Name string }
+	_ = database.GetMysqlDb().Table("user").Select("name").Where("id = ?", userID).Take(&uname).Error
+	if uname.Name != "" {
+		greeting = "你好，我是 " + uname.Name + "，我们一起聊天和下棋吧！"
+	}
+	// save message (non-fatal if fails)
+	if msg, err := chatSvc.SaveMessage(relationID, uint(userID), senderID, greeting); err == nil {
+		// push via websocket if possible
+		if websocket.DefaultHub != nil {
+			_ = websocket.DefaultHub.SendToUser(int(senderID), &websocket.ChatMessage{
+				BaseMessage: websocket.BaseMessage{Type: websocket.MessageType(15)},
+				Content:     msg.Content,
+				Sender:      uname.Name,
+				RelationId:  relationID,
+				SenderId:    uint(userID),
+				MessageId:   msg.ID,
+				CreatedAt:   msg.CreatedAt.Unix(),
+			})
+		}
+	}
+
+	dto.SuccessResponse(c, dto.WithData(gin.H{"relationId": relationID}))
+}
+
+// DeleteFriendRequest rejects a friend request (delete DB record)
+func (fc *FriendController) DeleteFriendRequest(c *gin.Context) {
+	uid, exists := c.Get("userId")
+	if !exists {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+	_ = uid.(int)
+
+	idStr := c.Param("id")
+	id64, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("非法的请求ID"))
+		return
+	}
+	reqID := uint(id64)
+
+	if err := fc.frService.DeleteByID(reqID); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+	dto.SuccessResponse(c, dto.WithData(nil))
 }

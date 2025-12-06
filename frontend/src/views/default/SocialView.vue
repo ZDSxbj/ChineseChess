@@ -5,14 +5,17 @@ import type { UserInfo } from '@/api/user/user'
 import { inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getMessages, markRead, sendMessage } from '@/api/user/chat'
 import { getUserInfo } from '@/api/user/get_info'
-import { checkFriendRequest, deleteFriend, getFriends } from '@/api/user/social'
+import { acceptFriendRequest, checkFriendRequest, deleteFriend, deleteFriendRequest, getFriendRequests, getFriends } from '@/api/user/social'
 import FriendCard from '@/components/FriendCard.vue'
+import FriendRequestCard from '@/components/FriendRequestCard.vue'
 import { showMsg } from '@/components/MessageBox'
 import { useSocialStore } from '@/store/useSocialStore'
 // channel handling is centralized in social store
 import { useUserStore } from '@/store/useStore'
+import channel from '@/utils/channel'
 
 const friends = ref<FriendItem[]>([])
+const friendRequests = ref<any[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -285,7 +288,13 @@ async function load(isPolling = false) {
       // 计算并同步全局未读总数
       try {
         const sum = (newFriends || []).reduce((s: number, it: any) => s + (Number(it.unreadCount) || 0), 0)
-        socialStore.setTotal(sum)
+        // also include pending friend requests count so totalUnread = chat unread + friend requests
+        let reqCount = 0
+        try {
+          const rr: any = await getFriendRequests()
+          reqCount = (rr.requests || []).length
+        } catch {}
+        socialStore.setTotal(sum + reqCount)
       }
       catch (e) {
         // ignore
@@ -299,6 +308,33 @@ async function load(isPolling = false) {
   finally {
     if (!isPolling)
       loading.value = false
+  }
+}
+
+async function acceptRequest(requestId: number) {
+  try {
+    const resp: any = await acceptFriendRequest(requestId)
+    // 减少未读
+    try { socialStore.decrease(1) } catch {}
+    // 刷新好友列表
+    await load()
+    // 后端已保存并推送招呼消息，前端无需重复发送
+    // 移除本地请求列表项
+    friendRequests.value = friendRequests.value.filter((r: any) => r.id !== requestId)
+  } catch (e) {
+    // eslint-disable-next-line no-alert
+    alert('同意好友申请失败')
+  }
+}
+
+async function rejectRequest(requestId: number) {
+  try {
+    await deleteFriendRequest(requestId)
+    try { socialStore.decrease(1) } catch {}
+    friendRequests.value = friendRequests.value.filter((r: any) => r.id !== requestId)
+  } catch (e) {
+    // eslint-disable-next-line no-alert
+    alert('拒绝好友申请失败')
   }
 }
 
@@ -359,6 +395,34 @@ onMounted(() => {
   catch {
     // ignore
   }
+
+  // 加载当前的好友申请列表
+  async function loadFriendRequests() {
+    try {
+      const resp: any = await getFriendRequests()
+      friendRequests.value = resp.requests || []
+    } catch (e) {
+      // ignore
+    }
+  }
+  loadFriendRequests()
+
+  // 订阅 websocket 的好友申请推送，及时显示新请求
+  channel.on('NET:FRIEND:REQUEST', (data: any) => {
+    try {
+      // payload: { requestId, senderId, senderName, content, createdAt }
+      const it = {
+        id: data.requestId,
+        senderId: data.senderId,
+        senderName: data.senderName,
+        senderAvatar: undefined,
+        content: data.content,
+        createdAt: data.createdAt,
+      }
+      // 将新申请放到最前面
+      friendRequests.value.unshift(it)
+    } catch (e) {}
+  })
 
   // 注册消息回调，用于将消息追加到当前打开的会话或更新对应好友的 unreadCount
   _social_onMsg = (data: any) => {
@@ -498,6 +562,19 @@ onBeforeUnmount(() => {
             <span>暂无好友</span>
           </div>
           <div class="divide-y divide-gray-50">
+            <!-- Friend Requests -->
+            <template v-if="friendRequests.length > 0">
+              <div class="px-4 pt-3 pb-1 text-sm text-gray-500">好友申请</div>
+              <div class="divide-y divide-gray-50">
+                <FriendRequestCard
+                  v-for="rq in friendRequests"
+                  :key="rq.id"
+                  :request="rq"
+                  @accept="acceptRequest"
+                  @reject="rejectRequest"
+                />
+              </div>
+            </template>
             <FriendCard
               v-for="f in friends"
               :key="f.id"
