@@ -19,6 +19,7 @@ const (
 	messageDrawResponse   MessageType = 14 // 和棋响应
 	messageChatMessage    MessageType = 15 // 聊天消息 (与前端保持一致)
 	messageSync           MessageType = 16 // 同步当前房间状态（重连使用）
+	messageFriendRequest  MessageType = 17 // 好友申请（通过 websocket 发送/推送）
 )
 
 type BaseMessage struct {
@@ -74,6 +75,16 @@ type ChatMessage struct {
 	SenderId   uint   `json:"senderId,omitempty"`
 	MessageId  uint   `json:"messageId,omitempty"`
 	CreatedAt  int64  `json:"createdAt,omitempty"`
+}
+
+type FriendRequestMessage struct {
+	BaseMessage
+	RequestId  uint   `json:"requestId,omitempty"`
+	SenderId   uint   `json:"senderId,omitempty"`
+	ReceiverId uint   `json:"receiverId,omitempty"`
+	Content    string `json:"content,omitempty"`
+	CreatedAt  int64  `json:"createdAt,omitempty"`
+	SenderName string `json:"senderName,omitempty"`
 }
 
 // SyncMessage 用于在玩家重连时将房间当前的棋步历史、玩家角色和当前轮次同步给客户端

@@ -2,14 +2,15 @@
 import type { ChatMessage } from '@/api/user/chat'
 import type { FriendItem } from '@/api/user/social'
 import type { UserInfo } from '@/api/user/user'
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getMessages, markRead, sendMessage } from '@/api/user/chat'
-import { deleteFriend, getFriends } from '@/api/user/social'
 import { getUserInfo } from '@/api/user/get_info'
+import { checkFriendRequest, deleteFriend, getFriends } from '@/api/user/social'
 import FriendCard from '@/components/FriendCard.vue'
+import { showMsg } from '@/components/MessageBox'
+import { useSocialStore } from '@/store/useSocialStore'
 // channel handling is centralized in social store
 import { useUserStore } from '@/store/useStore'
-import { useSocialStore } from '@/store/useSocialStore'
 
 const friends = ref<FriendItem[]>([])
 const loading = ref(false)
@@ -26,6 +27,7 @@ const messages = ref<ChatMessage[]>([])
 const inputMsg = ref('')
 const userStore = useUserStore()
 const socialStore = useSocialStore()
+const ws = inject('ws') as any
 let _social_onMsg: ((data: any) => void) | null = null
 const _base = import.meta.env.BASE_URL || '/'
 const base = _base.endsWith('/') ? _base : `${_base}/`
@@ -38,7 +40,7 @@ async function loadMessagesForSelected() {
   const friend = friends.value.find(f => f.id === sid)
   if (!friend || !friend.relationId)
     return
-    try {
+  try {
     const resp: any = await getMessages(friend.relationId)
     // 支持后端直接返回数组或 { messages: [] }
     const arr = Array.isArray(resp) ? resp : (resp.messages || [])
@@ -127,6 +129,7 @@ async function performSearch() {
 
   // Reset selection and active chat when searching
   selectedFriendId.value = null
+  // eslint-disable-next-line style/max-statements-per-line
   try { socialStore.setActiveRelationId(null) } catch { /* ignore */ }
 
   if (name === userStore.userInfo?.name) {
@@ -141,13 +144,106 @@ async function performSearch() {
   try {
     const resp = await getUserInfo({ name })
     searchResult.value = resp as unknown as UserInfo
+    // 检查当前用户是否已向该用户发送好友申请
+    try {
+      const chk: any = await checkFriendRequest((searchResult.value as any).id)
+      ;(searchResult as any).pending = chk.exists
+    } catch {}
     searchStatus.value = 'found'
-  } catch (e) {
+  } catch {
     searchStatus.value = 'not-found'
   }
-}function handleAddFriend() {
-  // TODO: Implement add friend logic
-  alert('添加好友功能尚未实现')
+}
+// Add-friend modal state
+const addModalVisible = ref(false)
+const addModalContent = ref('')
+const addModalSubmitting = ref(false)
+
+async function tryAddFriend() {
+  if (!searchResult.value) return
+  try {
+    const chk: any = await checkFriendRequest((searchResult.value as any).id)
+    if (chk && chk.exists) {
+      ;(searchResult as any).pending = true
+      showMsg('好友申请已发送，请等待对方回应')
+      return
+    }
+  } catch (err: any) {
+    const status = err?.response?.status
+    if (status === 404) {
+      showMsg('检查申请状态的接口未找到，请重启后端或稍后重试')
+      return
+    }
+    showMsg('检查好友申请状态失败，请稍后重试')
+    return
+  }
+  // 不存在相同申请，打开模态
+  openAddFriendModal()
+}
+
+function openAddFriendModal() {
+  if (!searchResult.value) return
+  addModalContent.value = ''
+  addModalVisible.value = true
+  // 禁止背景滚动
+  // eslint-disable-next-line style/max-statements-per-line
+  try { document.body.style.overflow = 'hidden' } catch {}
+  // focus will be handled via ref in template (autofocus not reliable in some browsers)
+}
+
+function closeAddFriendModal() {
+  addModalVisible.value = false
+  addModalSubmitting.value = false
+  // eslint-disable-next-line style/max-statements-per-line
+  try { document.body.style.overflow = '' } catch {}
+}
+
+async function sendAddFriend() {
+  if (!ws) {
+    // eslint-disable-next-line no-alert
+    alert('未连接到 WebSocket，无法发送')
+    return
+  }
+  if (!searchResult.value) return
+  // 在发送前向后端检查是否已有相同的好友申请（避免重复发送）
+  try {
+    const chk: any = await checkFriendRequest((searchResult.value as any).id)
+    if (chk && chk.exists) {
+      ;(searchResult as any).pending = true
+      // eslint-disable-next-line no-alert
+      alert('好友申请已发送，请等待对方回应')
+      closeAddFriendModal()
+      return
+    }
+  } catch (err: any) {
+    // 如果后端检查接口不可用（404）或其他错误，给出明确提示并阻止发送，避免重复创建记录
+    const status = err?.response?.status
+    if (status === 404) {
+      // eslint-disable-next-line no-alert
+      alert('检查申请状态的接口未找到，请重启后端或稍后重试')
+      return
+    }
+    // 其他错误则提示并阻止发送
+    // eslint-disable-next-line no-alert
+    alert('检查好友申请状态失败，请稍后重试')
+    return
+  }
+  const content = (addModalContent.value || '').trim() || '你好，我们加个好友吧'
+  addModalSubmitting.value = true
+  try {
+    ws.sendFriendRequest(searchResult.value.id, content)
+    ;(searchResult as any).pending = true
+    closeAddFriendModal()
+    // 简短提示
+    // eslint-disable-next-line no-alert
+    alert('好友申请已发送')
+  }
+  catch (e) {
+    console.error('发送好友申请失败', e)
+    // eslint-disable-next-line no-alert
+    alert('发送失败，请重试')
+    addModalSubmitting.value = false
+  }
 }
 
 let pollTimer: number | undefined
@@ -239,7 +335,7 @@ async function confirmDelete() {
     if (selectedFriendId.value === id)
       selectedFriendId.value = null
       // 清除 store 中的 activeRelationId，避免离开会话后仍被认为活跃
-      socialStore.setActiveRelationId(null)
+    socialStore.setActiveRelationId(null)
     confirmDeleteId.value = null
   }
   catch {
@@ -260,7 +356,7 @@ onMounted(() => {
   try {
     socialStore.init()
   }
-  catch (e) {
+  catch {
     // ignore
   }
 
@@ -311,6 +407,7 @@ onBeforeUnmount(() => {
   if (_social_onMsg)
     socialStore.offMessage(_social_onMsg)
   // 离开社交页面时，取消任何活跃会话，防止空间外仍被认为处于活跃状态
+  // eslint-disable-next-line style/max-statements-per-line
   try { socialStore.setActiveRelationId(null) } catch { /* ignore */ }
 })
 </script>
@@ -376,8 +473,8 @@ onBeforeUnmount(() => {
                       <div v-else-if="searchResult.gender === '其他'" class="i-carbon-help text-gray-400 text-lg" title="其他"></div>
                     </div>
                     <!-- Add Button -->
-                    <button @click="handleAddFriend" class="px-3 py-1 text-xs text-white bg-blue-500 rounded-full hover:bg-blue-600 transition-colors">
-                      添加
+                    <button :disabled="(searchResult as any).pending" @click="tryAddFriend" class="px-3 py-1 text-xs text-white bg-blue-500 rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :title="(searchResult as any).pending ? '请等待对方响应' : ''" aria-haspopup="dialog">
+                      {{ (searchResult as any).pending ? '已申请' : '添加' }}
                     </button>
                   </div>
 
@@ -518,6 +615,21 @@ onBeforeUnmount(() => {
         <div class="flex justify-end gap-3">
           <button class="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors" @click="confirmDeleteId = null">取消</button>
           <button class="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white shadow-md hover:shadow-lg transition-all font-medium" @click="confirmDelete">确认删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加好友模态框 -->
+    <div v-if="addModalVisible" class="fixed inset-0 z-[90] flex items-center justify-center">
+      <!-- backdrop -->
+      <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeAddFriendModal"></div>
+      <div role="dialog" aria-modal="true" class="bg-white z-50 w-[420px] max-w-[90%] p-6 rounded-2xl shadow-2xl transform transition-all" @keydown.esc="closeAddFriendModal">
+        <h3 class="text-lg font-semibold text-gray-800 mb-2">发送好友申请</h3>
+        <p class="text-sm text-gray-500 mb-4">给 <span class="font-medium">{{ searchResult?.name }}</span> 留言，让对方更容易接受你的申请。</p>
+        <textarea v-model="addModalContent" rows="4" class="w-full border border-gray-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30" placeholder="说点什么吧（可选）"></textarea>
+        <div class="flex items-center justify-end gap-3 mt-4">
+          <button class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50" @click="closeAddFriendModal">取消</button>
+          <button :disabled="addModalSubmitting" class="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60" @click="sendAddFriend">发送</button>
         </div>
       </div>
     </div>

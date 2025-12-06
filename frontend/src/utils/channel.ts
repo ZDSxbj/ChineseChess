@@ -48,6 +48,13 @@ interface GameEvents {
     messageId?: number
     createdAt?: number
   }
+  'NET:FRIEND:REQUEST': {
+    requestId?: number
+    senderId?: number
+    senderName?: string
+    content?: string
+    createdAt?: number
+  }
 }
 
 type Listener<T> = (req: T) => void

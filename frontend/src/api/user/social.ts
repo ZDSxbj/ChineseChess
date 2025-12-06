@@ -20,3 +20,11 @@ export async function getFriends(): Promise<{ friends: FriendItem[] }> {
 export async function deleteFriend(friendId: number) {
   return Request.delete(`/user/friends/${friendId}`)
 }
+
+export async function getFriendRequests(): Promise<{ requests: any[] }> {
+  return Request.get('/user/friend-requests')
+}
+
+export async function checkFriendRequest(receiverId: number): Promise<{ exists: boolean }> {
+  return Request.get(`/user/friend-requests/check?receiverId=${receiverId}`)
+}

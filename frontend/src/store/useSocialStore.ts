@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { markRead } from '@/api/user/chat'
-import { getFriends } from '@/api/user/social'
+import { getFriendRequests, getFriends } from '@/api/user/social'
 import channel from '@/utils/channel'
 
 type MsgCallback = (data: any) => void
@@ -46,7 +46,13 @@ export const useSocialStore = defineStore('social', () => {
       const resp: any = await getFriends()
       const friends = resp.friends || []
       const sum = (friends || []).reduce((s: number, it: any) => s + (Number(it.unreadCount) || 0), 0)
-      setTotal(sum)
+      // also add pending friend requests
+      let reqCount = 0
+      try {
+        const r: any = await getFriendRequests()
+        reqCount = (r.requests || []).length
+      } catch {}
+      setTotal(sum + reqCount)
     }
     catch (e) {
       // 忽略错误（可能未登录或网络问题），稍后消息到来会补偿
@@ -59,7 +65,9 @@ export const useSocialStore = defineStore('social', () => {
         // 如果当前正查看该会话，则直接标为已读（后端）且不增加总数
         if (relationId && activeRelationId.value === relationId) {
           // 标记后端为已读
-          try { markRead(relationId) } catch { /* ignore */ }
+          // eslint-disable-next-line style/max-statements-per-line
+          try { markRead(relationId) }
+          catch { /* ignore */ }
         }
         else {
           // 非活跃会话，增加全局未读数
@@ -73,6 +81,12 @@ export const useSocialStore = defineStore('social', () => {
           try { cb(data) } catch { /* ignore individual listener errors */ }
         })
       }
+    })
+    // 当收到好友申请推送时，增加未读计数
+    channel.on('NET:FRIEND:REQUEST', (data: any) => {
+      try {
+        increase(1)
+      } catch {}
     })
   }
 

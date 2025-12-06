@@ -62,6 +62,11 @@ func SetupRouter() *gin.Engine {
 	userRoute.GET("/profile", user.GetUserProfile)
 	userRoute.PUT("/profile", user.UpdateUserProfile)
 	userRoute.GET("/friends", friend.GetFriends)
+	userRoute.GET("/friend-requests", friend.GetFriendRequests)
+	// 接受或拒绝好友申请
+	userRoute.POST("/friend-requests/:id/accept", friend.AcceptFriendRequest)
+	userRoute.DELETE("/friend-requests/:id", friend.DeleteFriendRequest)
+	userRoute.GET("/friend-requests/check", friend.CheckFriendRequest)
 	userRoute.DELETE("/friends/:friendId", friend.DeleteFriend)
 
 	// 聊天相关路由

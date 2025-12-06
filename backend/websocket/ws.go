@@ -20,6 +20,7 @@ import (
 	dtouser "chinese-chess-backend/dto/user"
 
 	modeluser "chinese-chess-backend/model/user"
+	"chinese-chess-backend/service"
 	"chinese-chess-backend/utils"
 	"slices"
 )
@@ -826,6 +827,34 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				CreatedAt:   time.Now().Unix(),
 			},
 		}
+
+	case messageFriendRequest:
+		// 解析请求并保存到数据库
+		var fr FriendRequestMessage
+		if err := json.Unmarshal(rawMessage, &fr); err != nil {
+			return fmt.Errorf("解析好友申请失败: %v", err)
+		}
+		// 创建数据库记录
+		frSvc := service.NewFriendRequestService()
+		// Sender should be client.Id; receiver from payload
+		created, err := frSvc.Create(uint(client.Id), fr.ReceiverId, fr.Content)
+		if err != nil {
+			client.sendMessage(NormalMessage{BaseMessage: BaseMessage{Type: messageError}, Message: "发送好友申请失败"})
+			return nil
+		}
+		// 将申请推送给接收者（如果在线）
+		push := FriendRequestMessage{
+			BaseMessage: BaseMessage{Type: messageFriendRequest},
+			RequestId:   created.ID,
+			SenderId:    uint(client.Id),
+			ReceiverId:  fr.ReceiverId,
+			Content:     fr.Content,
+			CreatedAt:   created.CreatedAt.Unix(),
+			SenderName:  client.Username,
+		}
+		_ = ch.SendToUser(int(fr.ReceiverId), push)
+		// 也给发送方一个确认
+		client.sendMessage(NormalMessage{BaseMessage: BaseMessage{Type: messageNormal}, Message: "好友申请已发送"})
 
 	case messageDrawRequest:
 		if client.Status != userPlaying || client.RoomId == -1 {
