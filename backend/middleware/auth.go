@@ -11,8 +11,9 @@ import (
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/api/public") {
-			// 如果是公共接口，直接放行
+		// 放行公共接口与静态资源
+		if strings.HasPrefix(c.Request.URL.Path, "/api/public") ||
+			strings.HasPrefix(c.Request.URL.Path, "/api/uploads") {
 			c.Next()
 			return
 		}

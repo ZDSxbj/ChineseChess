@@ -49,6 +49,9 @@ func SetupRouter() *gin.Engine {
 	room := controller.NewRoomController(service.NewRoomService())
 	// 设置路由组
 	api := r.Group("/api")
+	// 静态资源：通过 /api/uploads 访问后端本地的 ./uploads 目录
+	// 这样配合 nginx 的 /chess/api/ 反向代理即可在生产环境访问
+	api.Static("/uploads", "./uploads")
 	api.POST("/info", user.GetUserInfo)
 	// userRoute := api.Group("/user")
 
@@ -60,7 +63,10 @@ func SetupRouter() *gin.Engine {
 	userRoute := api.Group("/user")
 	userRoute.GET("/profile", user.GetUserProfile)
 	userRoute.POST("/profile", user.UpdateUserProfile)
+	userRoute.POST("/avatar", user.UploadAvatar)
 	userRoute.POST("/update_email", user.UpdateEmail)
+	userRoute.POST("/update_password", user.UpdatePassword)
+	userRoute.POST("/check_password", user.CheckPassword)
 	userRoute.POST("/delete_account", user.DeleteAccount)
 	userRoute.PUT("/profile", user.UpdateUserProfile)
 	userRoute.GET("/friends", friend.GetFriends)

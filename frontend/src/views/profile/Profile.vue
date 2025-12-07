@@ -21,8 +21,8 @@
           <img v-if="formData.avatar" :src="formData.avatar" alt="用户头像" class="avatar-img" />
           <div v-else class="avatar-empty"></div>
 
-          <input type="file" id="avatar-input" class="avatar-input" @change="handleAvatarChange" />
-          <label for="avatar-input" class="upload-btn">上传头像</label>
+          <input type="file" id="avatar-input" class="avatar-input" accept="image/*" @change="handleAvatarChange" :disabled="isUploadingAvatar" />
+          <label for="avatar-input" class="upload-btn">{{ isDefaultAvatar ? '上传头像' : '修改头像' }}</label>
         </div>
       </div>
 
@@ -131,7 +131,8 @@
       </div>
 
       <div class="form-actions">
-       <button type="button" class="btn btn-secondary" @click="promptLogout">退出登录</button>
+           <button type="button" class="btn btn-secondary" @click="openChangePwd">修改密码</button>
+           <button type="button" class="btn btn-secondary" @click="promptLogout">退出登录</button>
         <button type="button" class="btn btn-danger" @click="deleteAccount" :disabled="isProcessing">
           <span v-if="!isProcessing">注销账号</span>
           <span v-else>处理中...</span>
@@ -171,6 +172,27 @@
         </div>
       </div>
     </div>
+
+    <!-- 修改密码弹窗 -->
+    <div v-if="showChangePwdModal" class="modal-overlay">
+      <div class="modal-box">
+        <p class="modal-text" v-if="changePwdStep === 'old'">请输入原密码</p>
+        <p class="modal-text" v-else>请输入新密码</p>
+        <input v-if="changePwdStep === 'old'" type="password" class="form-control" v-model="oldPassword" placeholder="请输入原密码" />
+        <input v-else type="password" class="form-control" v-model="newPassword" placeholder="请输入新密码" />
+        <p v-if="changePwdStep === 'new'" style="margin-top:8px;color:#666;font-size:13px">
+          密码至少6位，且包含大小写字母、数字和 !@#$%^&*? 中的一个。
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="cancelChangePwd">取消</button>
+          <button class="btn btn-danger" :disabled="isChangingPwd" @click="confirmChangePwd">
+            <span v-if="!isChangingPwd">确定</span>
+            <span v-else>处理中...</span>
+          </button>
+        </div>
+        <p v-if="changePwdError" style="color:#d9534f;margin-top:8px">{{ changePwdError }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -178,11 +200,17 @@
 import { ref, onMounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/useStore';
-import RequestHandler from '@/api/useRequest'; 
+import RequestHandler, { API_URL } from '@/api/useRequest'; 
 import { getProfile } from '@/api/user/getProfile';
 import { updateProfile } from '@/api/user/updateProfile';
 import { sendCode as sendEmailCode } from '@/api/user/send_code'
 import { updateEmail } from '@/api/user/updateEmail'
+import { updatePassword } from '@/api/user/updatePassword'
+import { checkPassword } from '@/api/user/checkPassword'
+import { uploadAvatar } from '@/api/user/uploadAvatar'
+// 默认头像：后端存的是相对路径，前端拼接完整 URL
+const DEFAULT_AVATAR_PATH = '/uploads/avatars/default.png'
+const DEFAULT_AVATAR_URL = `${API_URL}${DEFAULT_AVATAR_PATH}`
 
 // 路由实例
 const router = useRouter();
@@ -193,6 +221,8 @@ const userStore = useUserStore();
 const isLoading = ref(true);
 const hasError = ref(false);
 const isProcessing = ref(false); // 处理状态（用于注销账号）
+const isUploadingAvatar = ref(false);
+const isDefaultAvatar = ref(true);
 
 const showLogoutConfirm = ref(false);
 const showSaveSuccess = ref(false);
@@ -226,6 +256,14 @@ let countdownTimer: number | null = null;
 const isVerifying = ref<boolean>(false);
 const verifyError = ref<string | null>(null);
 
+// 修改密码弹窗相关状态
+const showChangePwdModal = ref(false);
+const oldPassword = ref('');
+const newPassword = ref('');
+const changePwdStep = ref<'old'|'new'>('old');
+const changePwdError = ref<string | null>(null);
+const isChangingPwd = ref(false);
+
 /**
  * @description: 初始化表单数据（从 API 获取）
  */
@@ -242,7 +280,13 @@ const initForm = async () => {
 
     if (userData) {
       Object.assign(formData, {
-        avatar: userData.avatar || '', // 不使用默认头像，缺省为空
+        // 头像规范化：若为相对路径则拼接 API_URL；为空则使用默认头像
+        avatar: (() => {
+          const a = userData.avatar || ''
+          if (!a) return DEFAULT_AVATAR_URL
+          if (typeof a === 'string' && a.startsWith('/uploads')) return `${API_URL}${a}`
+          return a
+        })(),
         name: userData.name || '未设置姓名',
         gender: userData.gender || '未选择',
         email: userData.email || '未设置邮箱',
@@ -250,10 +294,11 @@ const initForm = async () => {
         totalGames: userData.totalGames || 0,
         winRate: userData.winRate || 0
       });
+      isDefaultAvatar.value = (userData.avatar == null) || (userData.avatar === DEFAULT_AVATAR_PATH) || (formData.avatar === DEFAULT_AVATAR_URL)
     } else {
       // 默认占位文本，avatar 保持空字符串
       Object.assign(formData, {
-        avatar: '',
+        avatar: DEFAULT_AVATAR_URL,
         name: '未设置姓名',
         gender: '未选择',
         email: '未设置邮箱',
@@ -261,6 +306,7 @@ const initForm = async () => {
         totalGames: 0,
         winRate: 0
       });
+      isDefaultAvatar.value = true
     }
 
     isLoading.value = false;
@@ -295,6 +341,93 @@ const cancelEdit = () => {
   if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
 };
 
+// 打开修改密码弹窗
+const openChangePwd = () => {
+  showChangePwdModal.value = true;
+  changePwdStep.value = 'old';
+  oldPassword.value = '';
+  newPassword.value = '';
+  changePwdError.value = null;
+};
+
+// 取消修改密码
+const cancelChangePwd = () => {
+  showChangePwdModal.value = false;
+  changePwdStep.value = 'old';
+  oldPassword.value = '';
+  newPassword.value = '';
+  changePwdError.value = null;
+  isChangingPwd.value = false;
+};
+
+// 确认修改密码
+const confirmChangePwd = async () => {
+  // 第一步：立即校验原密码
+  if (changePwdStep.value === 'old') {
+    if (!oldPassword.value) {
+      changePwdError.value = '请输入原密码';
+      return;
+    }
+    try {
+      isChangingPwd.value = true;
+      await checkPassword({ password: oldPassword.value });
+      // 原密码正确，进入新密码输入
+      changePwdStep.value = 'new';
+      changePwdError.value = null;
+    } catch (e: any) {
+      const msg = e?.response?.data?.msg || '密码错误';
+      changePwdError.value = msg;
+      // 保持在输入原密码步骤
+    } finally {
+      isChangingPwd.value = false;
+    }
+    return;
+  }
+
+  // 第二步：提交新密码并修改
+  if (changePwdStep.value === 'new') {
+    if (!newPassword.value) {
+      changePwdError.value = '请输入新密码';
+      return;
+    }
+    // 新旧密码相同则提示未修改
+    if (newPassword.value === oldPassword.value) {
+      changePwdError.value = '密码未修改';
+      return;
+    }
+    // 复杂度校验：至少6位，包含大小写字母、数字和特殊字符中的一个
+    const hasMinLen = newPassword.value.length >= 6;
+    const hasLower = /[a-z]/.test(newPassword.value);
+    const hasUpper = /[A-Z]/.test(newPassword.value);
+    const hasDigit = /\d/.test(newPassword.value);
+    const hasSpecial = /[!@#$%^&*?]/.test(newPassword.value);
+    if (!(hasMinLen && hasLower && hasUpper && hasDigit && hasSpecial)) {
+      changePwdError.value = '修改密码失败';
+      return;
+    }
+    try {
+      isChangingPwd.value = true;
+      const resp = await updatePassword({ oldPassword: oldPassword.value, newPassword: newPassword.value });
+      const msg = (resp as any)?.data?.msg || '修改成功';
+      if (msg !== '修改成功') {
+        changePwdError.value = msg;
+        // 如果后端仍返回密码错误（极端情况），回到第一步
+        if (msg.includes('密码错误')) changePwdStep.value = 'old';
+        return;
+      }
+      // 成功
+      showChangePwdModal.value = false;
+      showSaveSuccess.value = true;
+    } catch (e: any) {
+      const msg = e?.response?.data?.msg || '修改失败，请稍后重试';
+      changePwdError.value = msg;
+      if (msg.includes('密码错误')) changePwdStep.value = 'old';
+    } finally {
+      isChangingPwd.value = false;
+    }
+  }
+};
+
 const sendCode = async () => {
   const email = (newEmail.value || '').trim();
   const emailPattern = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
@@ -302,6 +435,31 @@ const sendCode = async () => {
     emailErrorMsg.value = '请输入有效邮箱';
     showEmailError.value = true;
     return;
+  }
+
+  // 与当前邮箱相同：直接提示并跳过发送验证码
+  if ((formData.email || '').trim().toLowerCase() === email.toLowerCase()) {
+    emailErrorMsg.value = '该邮箱已注册';
+    showEmailError.value = true;
+    return;
+  }
+
+  // 预检是否为其他用户已注册邮箱：
+  // 利用后端 UpdateEmail 的“先查重再验码”逻辑，传入无效验证码触发查重。
+  try {
+    await updateEmail({ email, code: 'invalid' });
+    // 理论上不会成功；若意外成功也不继续发送验证码
+    emailErrorMsg.value = '该邮箱已注册';
+    showEmailError.value = true;
+    return;
+  } catch (e: any) {
+    const msg = e?.response?.data?.msg || '';
+    if (msg === '该邮箱已存在') {
+      emailErrorMsg.value = '该邮箱已注册';
+      showEmailError.value = true;
+      return;
+    }
+    // 其他错误（如验证码错误/过期等）则继续发送验证码
   }
 
   try {
@@ -421,12 +579,37 @@ const saveEdit = async (key: string) => {
 /**
  * @description: 处理头像上传
  */
-const handleAvatarChange = (e: Event) => {
+const handleAvatarChange = async (e: Event) => {
   const input = e.target as HTMLInputElement;
-  if (input.files && input.files[0]) {
-    const file = input.files[0];
-    formData.avatar = URL.createObjectURL(file);
-    // TODO: 实际项目中需要将文件上传到服务器
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  try {
+    isUploadingAvatar.value = true;
+    // 调用后端上传接口，返回相对路径，如 /uploads/avatars/xxx.png
+    const resp = await uploadAvatar(file);
+    const url = (resp as any)?.url || (resp as any)?.data?.url || '';
+    const path = (resp as any)?.path || (resp as any)?.data?.path || '';
+    if (!url && !path) {
+      emailErrorMsg.value = '上传失败，请稍后重试';
+      showEmailError.value = true;
+      return;
+    }
+    // 优先使用后端返回的完整URL；若缺失则拼接相对路径
+    const fullUrl = url || `${API_URL}${path}`;
+    // 保存到后端用户资料（存数据库为完整 URL）
+    await updateProfile({ avatar: fullUrl });
+    // 更新本地展示
+    formData.avatar = fullUrl;
+    showSaveSuccess.value = true;
+    isDefaultAvatar.value = false;
+  } catch (err: any) {
+    const msg = err?.response?.data?.message || '上传失败，请重试';
+    emailErrorMsg.value = msg;
+    showEmailError.value = true;
+  } finally {
+    isUploadingAvatar.value = false;
+    // 重置文件选择，防止同文件无法再次触发 change
+    try { (e.target as HTMLInputElement).value = ''; } catch {}
   }
 };
 

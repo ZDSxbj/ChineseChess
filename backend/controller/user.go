@@ -1,6 +1,12 @@
 package controller
 
 import (
+	"fmt"
+	"os"
+	"path"
+	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 
 	"chinese-chess-backend/database"
@@ -121,6 +127,48 @@ func (uc *UserController) UpdateEmail(c *gin.Context) {
 	c.JSON(200, gin.H{"msg": "修改成功"})
 }
 
+func (uc *UserController) UpdatePassword(c *gin.Context) {
+	var req struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"msg": "参数错误"})
+		return
+	}
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		c.JSON(401, gin.H{"msg": "未登录"})
+		return
+	}
+	if err := uc.userService.UpdatePassword(userID, req.OldPassword, req.NewPassword); err != nil {
+		c.JSON(400, gin.H{"msg": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"msg": "修改成功"})
+}
+
+// CheckPassword 校验当前用户的原密码是否正确
+func (uc *UserController) CheckPassword(c *gin.Context) {
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"msg": "参数错误"})
+		return
+	}
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		c.JSON(401, gin.H{"msg": "未登录"})
+		return
+	}
+	if err := uc.userService.CheckPassword(userID, req.Password); err != nil {
+		c.JSON(400, gin.H{"msg": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"msg": "ok"})
+}
+
 func (uc *UserController) DeleteAccount(c *gin.Context) {
 	userID := c.GetInt("userId")
 	if userID == 0 {
@@ -133,4 +181,73 @@ func (uc *UserController) DeleteAccount(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"msg": "注销成功"})
+}
+
+// UploadAvatar 处理用户头像上传，返回可在前端拼接 API 基址的相对路径
+// 返回 data: { path: "/uploads/avatars/<filename>" }
+func (uc *UserController) UploadAvatar(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未登录"))
+		return
+	}
+
+	file, err := c.FormFile("avatar")
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("缺少文件或字段名应为 avatar"))
+		return
+	}
+
+	// 限制大小（例如 5MB）
+	const maxSize int64 = 5 * 1024 * 1024
+	if file.Size > maxSize {
+		dto.ErrorResponse(c, dto.WithMessage("文件过大，最大 5MB"))
+		return
+	}
+
+	// 允许的扩展名
+	filename := file.Filename
+	ext := strings.ToLower(path.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+	default:
+		dto.ErrorResponse(c, dto.WithMessage("不支持的图片格式"))
+		return
+	}
+
+	// 确保保存目录存在
+	saveDir := path.Join("uploads", "avatars")
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("服务器创建目录失败"))
+		return
+	}
+
+	// 用 用户ID + 时间戳 生成文件名
+	newName := fmt.Sprintf("u%d_%d%s", userID, time.Now().UnixNano(), ext)
+	dst := path.Join(saveDir, newName)
+
+	if err := c.SaveUploadedFile(file, dst); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("保存文件失败"))
+		return
+	}
+
+	// 暴露路径
+	rel := "/uploads/avatars/" + newName
+	// 计算完整URL（使用环境变量 PUBLIC_API_PREFIX，默认 http://localhost:8080/api）
+	apiBase := os.Getenv("PUBLIC_API_PREFIX")
+	if apiBase == "" {
+		apiBase = "http://localhost:8080/api"
+	}
+	fullURL := apiBase + rel
+
+	// 写入用户头像为完整URL
+	db := database.GetMysqlDb()
+	var user userModel.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err == nil {
+		user.Avatar = fullURL
+		_ = db.Save(&user).Error
+	}
+
+	// 返回完整URL和相对路径，前端直接使用 url
+	dto.SuccessResponse(c, dto.WithData(gin.H{"path": rel, "url": fullURL}))
 }

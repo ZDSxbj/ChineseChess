@@ -6,6 +6,7 @@ import (
 	recordModel "chinese-chess-backend/model/record"
 	userModel "chinese-chess-backend/model/user"
 	"chinese-chess-backend/utils"
+	"os"
 	"time"
 
 	"gorm.io/gorm" // 新增gorm包导入
@@ -24,9 +25,18 @@ func (us *UserService) Register(req *dto.RegisterRequest) (dto.RegisterResponse,
 	var registerResp dto.RegisterResponse
 	var err error
 
+	// 统一头像 URL 前缀，支持环境变量 PUBLIC_API_PREFIX，默认 http://localhost:8080/api
+	apiBase := os.Getenv("PUBLIC_API_PREFIX")
+	if apiBase == "" {
+		apiBase = "http://localhost:8080/api"
+	}
+	defaultAvatar := apiBase + "/uploads/avatars/default.png"
+
 	user := userModel.User{
 		Name:  req.Name,
 		Email: req.Email,
+		// 默认存储完整 URL，避免前端环境差异
+		Avatar: defaultAvatar,
 	}
 
 	// 校验邮箱是否已注册
@@ -174,7 +184,16 @@ func (us *UserService) UpdateUserInfo(userID int, req *dto.UpdateUserRequest) er
 		user.Email = req.Email
 	}
 	if req.Avatar != "" {
-		user.Avatar = req.Avatar
+		// 兼容：当前端上传返回相对路径时，统一补齐为完整 URL
+		apiBase := os.Getenv("PUBLIC_API_PREFIX")
+		if apiBase == "" {
+			apiBase = "http://localhost:8080/api"
+		}
+		if len(req.Avatar) > 0 && req.Avatar[0] == '/' { // 以相对路径开头
+			user.Avatar = apiBase + req.Avatar
+		} else {
+			user.Avatar = req.Avatar
+		}
 	}
 
 	return db.Save(&user).Error
@@ -206,6 +225,38 @@ func (us *UserService) UpdateEmailWithCode(userID int, email string, code string
 	}
 	user.Email = email
 	return db.Save(&user).Error
+}
+
+func (us *UserService) UpdatePassword(userID int, oldPassword string, newPassword string) error {
+	db := database.GetMysqlDb()
+	var user userModel.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	// 校验旧密码
+	if !utils.CheckPassword(user.Password, oldPassword) {
+		return errors.New("密码错误")
+	}
+	// 加密新密码并保存
+	hashed, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	user.Password = hashed
+	return db.Save(&user).Error
+}
+
+// CheckPassword 仅校验原密码是否正确
+func (us *UserService) CheckPassword(userID int, password string) error {
+	db := database.GetMysqlDb()
+	var user userModel.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	if !utils.CheckPassword(user.Password, password) {
+		return errors.New("密码错误")
+	}
+	return nil
 }
 
 func (us *UserService) GetGameRecords(req *dto.GetGameRecordsRequest) (*dto.GetGameRecordsResponse, error) {
