@@ -2,13 +2,13 @@ package websocket
 
 import (
 	"chinese-chess-backend/database"
+	recordModel "chinese-chess-backend/model/record"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	recordModel "chinese-chess-backend/model/record"
 )
 
 var (
@@ -95,6 +95,8 @@ func (cr *ChessRoom) handleChat(sender *Client, content string) {
 		BaseMessage: BaseMessage{Type: messageChatMessage},
 		Content:     content,
 		Sender:      sender.Username,
+		SenderId:    uint(sender.Id),
+		CreatedAt:   time.Now().Unix(),
 	}
 
 	// 发送给对手

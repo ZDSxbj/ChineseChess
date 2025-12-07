@@ -18,8 +18,9 @@ import (
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/room"
 	dtouser "chinese-chess-backend/dto/user"
-	
+
 	modeluser "chinese-chess-backend/model/user"
+	"chinese-chess-backend/service"
 	"chinese-chess-backend/utils"
 	"slices"
 )
@@ -51,6 +52,9 @@ type ChessHub struct {
 	disconnectTimers map[int]*time.Timer
 }
 
+// DefaultHub 可供其他包调用（例如在消息保存后推送到在线用户）
+var DefaultHub *ChessHub
+
 func NewChessHub() *ChessHub {
 	pool := utils.NewWorkerPool()
 	hub := &ChessHub{
@@ -64,7 +68,21 @@ func NewChessHub() *ChessHub {
 	}
 	pool.Start()
 
+	// 设置为默认 Hub，路由初始化时会创建一个实例并可被控制器调用
+	DefaultHub = hub
+
 	return hub
+}
+
+// SendToUser 将消息直接发送到指定用户（如果在线）
+func (ch *ChessHub) SendToUser(userID int, message interface{}) error {
+	ch.mu.Lock()
+	client, ok := ch.Clients[userID]
+	ch.mu.Unlock()
+	if !ok || client == nil {
+		return fmt.Errorf("user %d not online", userID)
+	}
+	return client.sendMessage(message)
 }
 
 func (ch *ChessHub) Run() {
@@ -805,8 +823,38 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				BaseMessage: BaseMessage{Type: messageChatMessage},
 				Content:     chatMsg.Content,
 				Sender:      client.Username,
+				SenderId:    uint(client.Id),
+				CreatedAt:   time.Now().Unix(),
 			},
 		}
+
+	case messageFriendRequest:
+		// 解析请求并保存到数据库
+		var fr FriendRequestMessage
+		if err := json.Unmarshal(rawMessage, &fr); err != nil {
+			return fmt.Errorf("解析好友申请失败: %v", err)
+		}
+		// 创建数据库记录
+		frSvc := service.NewFriendRequestService()
+		// Sender should be client.Id; receiver from payload
+		created, err := frSvc.Create(uint(client.Id), fr.ReceiverId, fr.Content)
+		if err != nil {
+			client.sendMessage(NormalMessage{BaseMessage: BaseMessage{Type: messageError}, Message: "发送好友申请失败"})
+			return nil
+		}
+		// 将申请推送给接收者（如果在线）
+		push := FriendRequestMessage{
+			BaseMessage: BaseMessage{Type: messageFriendRequest},
+			RequestId:   created.ID,
+			SenderId:    uint(client.Id),
+			ReceiverId:  fr.ReceiverId,
+			Content:     fr.Content,
+			CreatedAt:   created.CreatedAt.Unix(),
+			SenderName:  client.Username,
+		}
+		_ = ch.SendToUser(int(fr.ReceiverId), push)
+		// 也给发送方一个确认
+		client.sendMessage(NormalMessage{BaseMessage: BaseMessage{Type: messageNormal}, Message: "好友申请已发送"})
 
 	case messageDrawRequest:
 		if client.Status != userPlaying || client.RoomId == -1 {
@@ -843,4 +891,3 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 	}
 	return nil
 }
-

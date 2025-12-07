@@ -19,6 +19,7 @@ const MessageType = {
   DrawResponse: 14, // 和棋响应
   ChatMessage: 15, // 聊天消息
   Sync: 16, // 同步房间状态（重连时服务端发送）
+  FriendRequest: 17, // 好友申请
 } as const
 
 interface WebSocketMessage {
@@ -33,6 +34,10 @@ interface WebSocketMessage {
   accepted?: boolean // 用于悔棋响应的布尔值字段
   content?: string // 聊天消息内容
   sender?: string // 聊天消息发送者
+  relationId?: number
+  senderId?: number
+  messageId?: number
+  createdAt?: number
 }
 
 function translateChessPosition(position: ChessPosition): ChessPosition {
@@ -58,6 +63,7 @@ export interface WebSocketService {
   sendRegretRequest: () => void
   sendRegretResponse: (accepted: boolean) => void
   sendChatMessage: (content: string) => void // 新增发送聊天消息方法
+  sendFriendRequest: (receiverId: number, content: string) => void
   sendDrawRequest: () => void
   sendDrawResponse: (accepted: boolean) => void
   getCurrentRoomId: () => number | undefined // 新增获取当前房间ID方法
@@ -151,11 +157,23 @@ export function useWebSocket(): WebSocketService {
         break
       }
       case MessageType.ChatMessage: {
-        // 处理聊天消息
-        const { sender, content } = data
-        if (sender && content) {
-          channel.emit('NET:CHAT:MESSAGE', { sender, content })
+        // 处理聊天消息，尽量使用 relationId/senderId 做精确路由
+        const { sender, content, relationId, senderId, messageId, createdAt } = data as any
+        if (content) {
+          channel.emit('NET:CHAT:MESSAGE', { sender, content, relationId, senderId, messageId, createdAt })
         }
+        break
+      }
+      case MessageType.FriendRequest: {
+        const payload = data as any
+        // 转发到 channel，社交界面可订阅处理
+        channel.emit('NET:FRIEND:REQUEST', {
+          requestId: payload.requestId,
+          senderId: payload.senderId,
+          senderName: payload.senderName,
+          content: payload.content,
+          createdAt: payload.createdAt,
+        })
         break
       }
       case MessageType.Sync: {
@@ -337,6 +355,15 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
+  // 发送好友申请
+  const sendFriendRequest = (receiverId: number, content: string) => {
+    sendMessage({
+      type: MessageType.FriendRequest,
+      receiverId,
+      content,
+    } as any)
+  }
+
   // 新增：获取当前房间ID的方法
   const getCurrentRoomId = () => currentRoomId.value
 
@@ -355,5 +382,6 @@ export function useWebSocket(): WebSocketService {
     sendDrawRequest,
     sendDrawResponse,
     getCurrentRoomId, // 新增导出获取当前房间ID的方法
+    sendFriendRequest,
   }
 }

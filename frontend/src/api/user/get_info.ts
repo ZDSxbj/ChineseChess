@@ -1,14 +1,14 @@
 import instance from '../useRequest'
+import type { UserInfo } from './user'
 
 export interface GetInfoRequest {
-  id: number
+  id?: number
+  name?: string
 }
 
-export interface GetInfoResponse {
-  id: number
-  name: string
-}
+// The backend returns the UserInfo fields directly in the data object because of struct embedding
+export type GetInfoResponse = UserInfo
 
-export function login(req: GetInfoRequest) {
-  return instance.post<GetInfoResponse>('/public/login', req)
+export function getUserInfo(req: GetInfoRequest) {
+  return instance.post<GetInfoResponse>('/info', req)
 }

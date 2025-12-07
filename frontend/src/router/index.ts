@@ -106,7 +106,8 @@ router.beforeEach((to, from, next) => {
 
   if (requiresAuth && !isLoggedIn) {
     next('/auth/login') // 未登录则跳登录页
-  } else {
+  }
+  else {
     next() // 已登录或无需登录，正常跳转
   }
 })

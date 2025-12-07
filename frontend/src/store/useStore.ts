@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 
 import { computed, ref, unref } from 'vue'
 
+import { getProfile } from '@/api/user/getProfile'
 import apiBus from '@/utils/apiBus'
 // 管理token
 export const useUserStore = defineStore('user', () => {
@@ -39,7 +40,18 @@ export const useUserStore = defineStore('user', () => {
   apiBus.on('API:LOGIN', (req) => {
     const { token: newToken, name, avatar, exp } = req
     setToken(newToken)
-    setUser({ name, avatar, exp })
+    // 尝试获取完整的用户资料（包含 id），以便前端用于消息发送者比对
+    getProfile().then((resp) => {
+      const data = (resp && typeof resp === 'object' && 'data' in resp) ? (resp as any).data : resp
+      if (data) {
+        setUser(data)
+        return
+      }
+      // 兜底设置部分信息
+      setUser({ name, avatar, exp })
+    }).catch(() => {
+      setUser({ name, avatar, exp })
+    })
   })
 
   apiBus.on('API:UN_AUTH', () => {
