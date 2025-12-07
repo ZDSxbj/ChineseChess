@@ -9,11 +9,15 @@ import { showMsg } from '@/components/MessageBox'
 import RegretModal from '@/components/RegretModal.vue'
 import ChessBoard from '@/composables/ChessBoard'
 import { clearGameState, getGameState, saveGameState, saveModalState, getModalState, clearModalState } from '@/store/gameStore'
+import { useUserStore } from '@/store/useStore'
 import channel from '@/utils/channel'
 
 const router = useRouter()
+const userStore = useUserStore()
 const chatPanelRef = ref()
 const networkPlay = ref(false)
+const opponentInfo = ref<any>(null)
+const selfColor = ref<'red' | 'black'>('red')
 
 const background = useTemplateRef('background')
 const chesses = useTemplateRef('chesses')
@@ -86,6 +90,7 @@ function review() {
     selfColor: chessBoard.SelfColor,
     moveHistory: chessBoard.moveHistoryList,
     currentRole: chessBoard.currentRole,
+    opponentInfo: opponentInfo.value,
   })
   clearModalState() // 退出时清除模态状态，防止下次进入时残留
   router.push('/game/replay')
@@ -190,6 +195,10 @@ onMounted(() => {
   const savedState = getGameState()
   if (savedState) {
     chessBoard.restoreState(savedState)
+    if (savedState.opponentInfo) {
+      opponentInfo.value = savedState.opponentInfo
+    }
+    selfColor.value = chessBoard.SelfColor
     console.log('Game state restored from localStorage')
   }
 
@@ -211,14 +220,25 @@ onMounted(() => {
     selfColor: chessBoard.SelfColor,
     moveHistory: chessBoard.moveHistoryList, // 初始为空
     currentRole: chessBoard.currentRole,
+    opponentInfo: opponentInfo.value,
   })
   // 清空消息队列
   channel.clearQueue('NET:GAME:END')
-  channel.on('NET:GAME:START', ({ color }) => {
+  channel.on('NET:GAME:START', ({ color, opponent }) => {
     console.log('Game started, color:', color)
+    // 重置游戏状态
+    gameOver.value = false
+    endModalVisible.value = false
+    endResult.value = null
+    regretModalVisible.value = false
+    drawModalVisible.value = false
+    clearModalState()
+
     chessBoard.stop()
     chessBoard.start(color, true)
     networkPlay.value = true
+    opponentInfo.value = opponent
+    selfColor.value = color
     // 新增：保存初始游戏状态
     saveGameState({
       isNetPlay: chessBoard.isNetworkPlay(),
@@ -226,6 +246,7 @@ onMounted(() => {
       selfColor: color,
       moveHistory: chessBoard.moveHistoryList, // 初始为空
       currentRole: chessBoard.currentRole,
+      opponentInfo: opponent,
     })
     // 清空消息队列
     channel.clearQueue('NET:GAME:END')
@@ -250,6 +271,7 @@ onMounted(() => {
     chessBoard.stop()
     chessBoard.start(role || 'red', true)
     networkPlay.value = true
+    selfColor.value = role || 'red'
     // 尝试从 sessionStorage 恢复历史（若存在）
     const savedState = getGameState()
     if (savedState && savedState.isNetPlay) {
@@ -317,6 +339,7 @@ onMounted(() => {
       selfColor: chessBoard.SelfColor,
       moveHistory: chessBoard.moveHistoryList,
       currentRole: chessBoard.currentRole,
+      opponentInfo: opponentInfo.value,
     })
     // 计算当前客户端对局结果
     if (winner === 'draw') {
@@ -393,19 +416,19 @@ onUnmounted(() => {
 
 <template>
   <div class="h-full w-full flex flex-col sm:flex-row">
-    <div class="block h-1/5 sm:h-full sm:w-1/5" />
-    <div class="relative h-3/5 w-full sm:h-full sm:w-3/5">
-      <canvas
-        ref="background"
-        class="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/4"
-      />
-      <canvas ref="chesses" class="absolute left-1/2 top-1/4 -translate-x-1/2 -translate-y-1/4" />
-    </div>
-    <div class="sm:h-full sm:w-1/5 flex flex-col">
-      <div class="flex flex-col space-y-4 mb-4">
+    <div class="block h-1/5 sm:h-full flex-1" />
+    <div class="relative h-3/5 w-full sm:h-full sm:w-5/12 flex flex-col">
+      <div class="relative flex-1 w-full">
+        <canvas
+          ref="background"
+          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        />
+        <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+      </div>
+      <div class="flex justify-center space-x-4 mb-20">
         <!-- 新增悔棋按钮 -->
         <button
-          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
           text="black xl"
           hover="bg-gray-9 text-gray-2"
           @click="regret"
@@ -415,7 +438,7 @@ onUnmounted(() => {
         <!-- 原有的认输按钮 -->
         <button
           v-if="networkPlay"
-          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
           text="black xl"
           hover="bg-gray-9 text-gray-2"
           @click="giveUp"
@@ -425,7 +448,7 @@ onUnmounted(() => {
         <!-- 新增和棋按钮 -->
         <button
           v-if="networkPlay"
-          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
           text="black xl"
           hover="bg-gray-9 text-gray-2"
           @click="offerDraw"
@@ -434,7 +457,7 @@ onUnmounted(() => {
         </button>
         <!-- 原有的退出按钮 -->
         <button
-          class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
+          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
           text="black xl"
           hover="bg-gray-9 text-gray-2"
           @click="quit"
@@ -442,9 +465,57 @@ onUnmounted(() => {
           退出
         </button>
       </div>
+    </div>
+    <div class="sm:h-full flex-1 flex flex-col pt-12 pb-20 pr-48">
+      <!-- 新增：用户信息面板 -->
+      <div v-if="networkPlay" class="bg-white/80 backdrop-blur rounded-xl shadow-sm p-4 mb-4 flex flex-col border border-gray-200">
+        <div class="flex items-center justify-between w-full mb-4">
+          <div class="flex flex-col items-center w-1/3">
+            <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" class="w-12 h-12 rounded-full mb-1 object-cover border-2 border-red-500" />
+            <span class="text-xs truncate w-full text-center font-medium">{{ userStore.userInfo?.name }}</span>
+            <span class="text-xs font-bold mt-1" :class="selfColor === 'red' ? 'text-red-600' : 'text-black'">{{ selfColor === 'red' ? '红方' : '黑方' }}</span>
+          </div>
+          <div class="text-2xl font-black text-gray-400 italic mx-2">VS</div>
+          <div class="flex flex-col items-center w-1/3">
+            <img :src="opponentInfo?.avatar || '/images/default_avatar.png'" class="w-12 h-12 rounded-full mb-1 object-cover border-2 border-black" />
+            <span class="text-xs truncate w-full text-center font-medium">{{ opponentInfo?.name || '对手' }}</span>
+            <span class="text-xs font-bold mt-1" :class="selfColor === 'red' ? 'text-black' : 'text-red-600'">{{ selfColor === 'red' ? '黑方' : '红方' }}</span>
+          </div>
+        </div>
+        <div class="flex justify-between w-full space-x-2">
+          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">经验</span>
+              <span class="font-bold text-gray-700">{{ userStore.userInfo?.exp || 0 }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">场次</span>
+              <span class="font-bold text-gray-700">{{ userStore.userInfo?.totalGames || 0 }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">胜率</span>
+              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(1) }}%</span>
+            </div>
+          </div>
+          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">经验</span>
+              <span class="font-bold text-gray-700">{{ opponentInfo?.exp || 0 }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">场次</span>
+              <span class="font-bold text-gray-700">{{ opponentInfo?.totalGames || 0 }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-500">胜率</span>
+              <span class="font-bold text-gray-700">{{ (opponentInfo?.winRate || 0).toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- 聊天面板 -->
-      <div class="flex-1">
+      <div class="flex-1 overflow-hidden flex flex-col">
         <ChatPanel v-if="networkPlay" ref="chatPanelRef" :ws="ws" />
       </div>
     </div>

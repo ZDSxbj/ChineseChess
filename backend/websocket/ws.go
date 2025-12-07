@@ -18,6 +18,7 @@ import (
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/room"
 	dtouser "chinese-chess-backend/dto/user"
+	"chinese-chess-backend/model/user"
 
 	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/service"
@@ -257,10 +258,33 @@ func (ch *ChessHub) Run() {
 					})
 					return nil
 				}
+
+				// 获取用户信息
+				var currentUser, nextUser user.User
+				database.GetMysqlDb().First(&currentUser, room.Current.Id)
+				database.GetMysqlDb().First(&nextUser, room.Next.Id)
+
 				room.Current.startPlay(roleRed)
 				room.Next.startPlay(roleBlack)
-				cur := startMessage{BaseMessage: BaseMessage{Type: messageStart}, Role: "red"}
-				next := startMessage{BaseMessage: BaseMessage{Type: messageStart}, Role: "black"}
+
+				curOpponent := OpponentInfo{
+					Name:       nextUser.Name,
+					Avatar:     nextUser.Avatar,
+					Exp:        nextUser.Exp,
+					TotalGames: nextUser.TotalGames,
+					WinRate:    nextUser.WinRate,
+				}
+
+				nextOpponent := OpponentInfo{
+					Name:       currentUser.Name,
+					Avatar:     currentUser.Avatar,
+					Exp:        currentUser.Exp,
+					TotalGames: currentUser.TotalGames,
+					WinRate:    currentUser.WinRate,
+				}
+
+				cur := startMessage{BaseMessage: BaseMessage{Type: messageStart}, Role: "red", Opponent: curOpponent}
+				next := startMessage{BaseMessage: BaseMessage{Type: messageStart}, Role: "black", Opponent: nextOpponent}
 				room.Current.sendMessage(cur)
 				room.Next.sendMessage(next)
 				// 记录对局开始时间

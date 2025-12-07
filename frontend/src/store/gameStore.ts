@@ -17,6 +17,7 @@ export interface GameState {
     currentRole: ChessRole
   }>
   currentRole: ChessRole
+  opponentInfo?: any
 }
 
 // 保存游戏状态到sessionStorage

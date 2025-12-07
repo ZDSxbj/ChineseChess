@@ -523,6 +523,10 @@ const confirmVerify = async () => {
 
     // 成功后更新本地显示
     formData.email = email;
+    // 同步更新全局 Store
+    if (userStore.userInfo) {
+      userStore.setUser({ ...userStore.userInfo, email: email });
+    }
     editingField.value = null;
     showEmailVerifyModal.value = false;
     showSaveSuccess.value = true;
@@ -565,6 +569,10 @@ const saveEdit = async (key: string) => {
   try {
     await updateProfile({ [key]: tempValue.value });
     formData[key] = tempValue.value;
+    // 同步更新全局 Store
+    if (userStore.userInfo) {
+      userStore.setUser({ ...userStore.userInfo, [key]: tempValue.value });
+    }
     editingField.value = null;
     tempValue.value = null;
     showSaveSuccess.value = true;
@@ -596,14 +604,18 @@ const handleAvatarChange = async (e: Event) => {
     }
     // 优先使用后端返回的完整URL；若缺失则拼接相对路径
     const fullUrl = url || `${API_URL}${path}`;
-    // 保存到后端用户资料（存数据库为完整 URL）
-    await updateProfile({ avatar: fullUrl });
+    // 后端 UploadAvatar 已写入数据库，无需再次调用 updateProfile，避免重复请求导致误报失败
     // 更新本地展示
     formData.avatar = fullUrl;
+    // 同步更新全局 Store，确保其他页面（如对战页）能即时获取最新头像
+    if (userStore.userInfo) {
+      userStore.setUser({ ...userStore.userInfo, avatar: fullUrl });
+    }
     showSaveSuccess.value = true;
     isDefaultAvatar.value = false;
   } catch (err: any) {
-    const msg = err?.response?.data?.message || '上传失败，请重试';
+    // 更健壮的错误处理：拦截器可能返回字符串消息
+    const msg = typeof err === 'string' ? err : (err?.response?.data?.message || err?.message || '上传失败，请重试');
     emailErrorMsg.value = msg;
     showEmailError.value = true;
   } finally {

@@ -62,5 +62,6 @@ export const useUserStore = defineStore('user', () => {
     logout()
   })
 
-  return { token, userInfo }
+  // 暴露必要的操作方法，便于在页面中调用（例如 Profile.vue 中更新头像等）
+  return { token, userInfo, setUser, setToken, logout }
 })

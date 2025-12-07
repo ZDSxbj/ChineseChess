@@ -42,9 +42,18 @@ type NormalMessage struct {
 	Message string `json:"message"`
 }
 
+type OpponentInfo struct {
+	Name       string  `json:"name"`
+	Avatar     string  `json:"avatar"`
+	Exp        int     `json:"exp"`
+	TotalGames int     `json:"totalGames"`
+	WinRate    float64 `json:"winRate"`
+}
+
 type startMessage struct {
 	BaseMessage
-	Role string `json:"role"`
+	Role     string       `json:"role"`
+	Opponent OpponentInfo `json:"opponent"`
 }
 
 type joinMessage struct {

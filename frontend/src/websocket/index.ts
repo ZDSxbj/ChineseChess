@@ -105,9 +105,9 @@ export function useWebSocket(): WebSocketService {
         break }
       case MessageType.Start:
       { showMsg('Game started')
-        const { role } = data as { role: 'red' | 'black' }
+        const { role, opponent } = data as { role: 'red' | 'black', opponent: any }
         channel.emit('MATCH:SUCCESS', null)
-        channel.emit('NET:GAME:START', { color: role })
+        channel.emit('NET:GAME:START', { color: role, opponent })
         break }
       case MessageType.End:
       { const { winner } = data
