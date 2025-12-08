@@ -18,7 +18,7 @@
         <label class="form-label">头像</label>
         <div class="avatar-upload">
           <!-- 如果没有头像则不渲染 img，保持空白 -->
-          <img v-if="formData.avatar" :src="formData.avatar" alt="用户头像" class="avatar-img" />
+          <img v-if="formData.avatar" :src="formData.avatar" alt="" class="avatar-img" @error="handleAvatarError" />
           <div v-else class="avatar-empty"></div>
 
           <input type="file" id="avatar-input" class="avatar-input" accept="image/*" @change="handleAvatarChange" :disabled="isUploadingAvatar" />
@@ -587,6 +587,9 @@ const saveEdit = async (key: string) => {
 /**
  * @description: 处理头像上传
  */
+const handleAvatarError = () => {
+  formData.avatar = DEFAULT_AVATAR_URL; // Fallback to default avatar
+};
 const handleAvatarChange = async (e: Event) => {
   const input = e.target as HTMLInputElement;
   if (!input.files || !input.files[0]) return;

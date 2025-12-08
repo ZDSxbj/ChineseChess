@@ -240,12 +240,27 @@ func (uc *UserController) UploadAvatar(c *gin.Context) {
 	}
 	fullURL := apiBase + rel
 
-	// 写入用户头像为完整URL
+	// 写入用户头像为完整URL，并删除旧头像文件（若存在且非默认头像）
 	db := database.GetMysqlDb()
 	var user userModel.User
 	if err := db.Where("id = ?", userID).First(&user).Error; err == nil {
+		oldAvatar := user.Avatar
 		user.Avatar = fullURL
 		_ = db.Save(&user).Error
+
+		// 删除旧文件（仅当旧头像是 /uploads/avatars/ 下的自定义文件且不是默认头像）
+		if oldAvatar != "" {
+			defaultAvatar := apiBase + "/uploads/avatars/default.png"
+			if oldAvatar != defaultAvatar {
+				if idx := strings.Index(oldAvatar, "/uploads/avatars/"); idx != -1 {
+					oldRel := oldAvatar[idx:]
+					// 文件系统路径
+					oldFsPath := path.Join(".", strings.TrimPrefix(oldRel, "/"))
+					// 尝试删除，忽略错误
+					_ = os.Remove(oldFsPath)
+				}
+			}
+		}
 	}
 
 	// 返回完整URL和相对路径，前端直接使用 url
