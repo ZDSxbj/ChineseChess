@@ -27,6 +27,11 @@ class ChessBoard {
     capturedPiece: ChessPiece | null// 被吃掉的棋子（如果有）
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
   }> = []
+  // 对战音效（选中与落子）
+  private selectAudio?: HTMLAudioElement
+  private clickAudio?: HTMLAudioElement
+  private eatAudio?: HTMLAudioElement
+  private checkAudio?: HTMLAudioElement
 
   constructor(
     boardElement: HTMLCanvasElement,
@@ -42,6 +47,24 @@ class ChessBoard {
     this.initCanvasElement()
     this.background = this.boardElement.getContext('2d') as CanvasRenderingContext2D
     this.chesses = this.chessesElement.getContext('2d') as CanvasRenderingContext2D
+    // 音频初始化（资源路径位于 public/audio/ 下）
+    try {
+      this.selectAudio = new Audio('/chess/audio/select.wav')
+      this.selectAudio.preload = 'auto'
+      this.selectAudio.volume = 0.7
+      this.clickAudio = new Audio('/chess/audio/click.wav')
+      this.clickAudio.preload = 'auto'
+      this.clickAudio.volume = 0.7
+      // 新增：吃子与将军音效
+      this.eatAudio = new Audio('/chess/audio/eat.mp3')
+      this.eatAudio.preload = 'auto'
+      this.eatAudio.volume = 0.8
+      this.checkAudio = new Audio('/chess/audio/check.mp3')
+      this.checkAudio.preload = 'auto'
+      this.checkAudio.volume = 0.8
+    } catch (e) {
+      console.warn('Audio init failed', e)
+    }
     this.listenEvent()
   }
 
@@ -301,6 +324,15 @@ class ChessBoard {
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
     piece.move(to)
+    // 非吃子落子音效（仅联机时启用，先不播放吃子，等判定是否将军后再决定）
+    if (this.isNetPlay && !targetPiece) {
+      try {
+        if (this.clickAudio) {
+          this.clickAudio.currentTime = 0
+          void this.clickAudio.play()
+        }
+      } catch {}
+    }
 
     // 只有自己走才发送走子事件
     if (this.currentRole === 'self') {
@@ -323,8 +355,24 @@ class ChessBoard {
       this.end(moverColor)
       return
     } else if (opponentInCheck) {
-      // 对方被将军，显示提示
+      // 对方被将军或我方被将军（取决于当前移动方），播放提示并响铃
       showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
+      try {
+        if (this.checkAudio) {
+          this.checkAudio.currentTime = 0
+          void this.checkAudio.play()
+        }
+      } catch {}
+    } else {
+      // 非将军的情况下，如果发生了吃子，则播放吃子音效（仅联机时启用）
+      if (this.isNetPlay && !!targetPiece) {
+        try {
+          if (this.eatAudio) {
+            this.eatAudio.currentTime = 0
+            void this.eatAudio.play()
+          }
+        } catch {}
+      }
     }
 
     // 如果直接吃掉对方的将，立即判定结束（移动方胜）
@@ -457,6 +505,10 @@ class ChessBoard {
     this.selectedPiece?.deselect()
     this.selectedPiece = piece
     piece.select()
+    // 选中棋子音效（仅联机时启用）
+    if (this.isNetPlay) {
+      this.selectAudio?.play().catch(() => {})
+    }
   }
 
   public start(color: ChessColor, isNet: boolean) {
