@@ -20,6 +20,11 @@ const MessageType = {
   ChatMessage: 15, // 聊天消息
   Sync: 16, // 同步房间状态（重连时服务端发送）
   FriendRequest: 17, // 好友申请
+  FriendChallengeInvite: 18, // 好友对弈邀请
+  FriendChallengeCancel: 19, // 撤销对弈邀请
+  FriendChallengeAccept: 20, // 接受对弈邀请
+  FriendChallengeReject: 21, // 拒绝对弈邀请
+  FriendChallengeCreated: 22, // 邀请已创建（仅发给发送者，含 challengeId、roomId）
 } as const
 
 interface WebSocketMessage {
@@ -67,6 +72,11 @@ export interface WebSocketService {
   sendDrawRequest: () => void
   sendDrawResponse: (accepted: boolean) => void
   getCurrentRoomId: () => number | undefined // 新增获取当前房间ID方法
+  // 好友挑战相关
+  sendFriendChallengeInvite: (receiverId: number, relationId: number) => void
+  sendFriendChallengeCancel: (challengeId: number, receiverId: number) => void
+  sendFriendChallengeAccept: (challengeId: number, senderId: number, roomId: number) => void
+  sendFriendChallengeReject: (challengeId: number, senderId: number) => void
 }
 
 export function useWebSocket(): WebSocketService {
@@ -150,6 +160,11 @@ export function useWebSocket(): WebSocketService {
         channel.emit('NET:CHESS:REGRET:RESPONSE', { accepted })
         break
       }
+      case MessageType.FriendChallengeCreated: {
+        const payload = data as any
+        channel.emit('NET:FRIEND:CHALLENGE:CREATED', payload)
+        break
+      }
       case MessageType.DrawResponse: {
         // 处理和棋响应
         const accepted = data.accepted
@@ -174,6 +189,30 @@ export function useWebSocket(): WebSocketService {
           content: payload.content,
           createdAt: payload.createdAt,
         })
+        break
+      }
+      case MessageType.FriendChallengeInvite: {
+        const payload = data as any
+        // 全局提示
+        showMsg(`收到了 ${payload.senderName || '好友'} 的对弈邀请，请及时在社交界面中查收`)
+        channel.emit('NET:FRIEND:CHALLENGE:INVITE', payload)
+        break
+      }
+      case MessageType.FriendChallengeCancel: {
+        const payload = data as any
+        showMsg('对方撤销了好友对弈邀请')
+        channel.emit('NET:FRIEND:CHALLENGE:CANCEL', payload)
+        break
+      }
+      case MessageType.FriendChallengeAccept: {
+        const payload = data as any
+        channel.emit('NET:FRIEND:CHALLENGE:ACCEPT', payload)
+        break
+      }
+      case MessageType.FriendChallengeReject: {
+        const payload = data as any
+        showMsg('对方拒绝了你的对弈邀请')
+        channel.emit('NET:FRIEND:CHALLENGE:REJECT', payload)
         break
       }
       case MessageType.Sync: {
@@ -364,6 +403,43 @@ export function useWebSocket(): WebSocketService {
     } as any)
   }
 
+  // 发送好友对战挑战邀请
+  const sendFriendChallengeInvite = (receiverId: number, relationId: number) => {
+    sendMessage({
+      type: MessageType.FriendChallengeInvite,
+      receiverId,
+      relationId,
+    } as any)
+  }
+
+  // 撤销挑战
+  const sendFriendChallengeCancel = (challengeId: number, receiverId: number) => {
+    sendMessage({
+      type: MessageType.FriendChallengeCancel,
+      challengeId,
+      receiverId,
+    } as any)
+  }
+
+  // 接受挑战
+  const sendFriendChallengeAccept = (challengeId: number, senderId: number, roomId: number) => {
+    sendMessage({
+      type: MessageType.FriendChallengeAccept,
+      challengeId,
+      senderId,
+      roomId,
+    } as any)
+  }
+
+  // 拒绝挑战
+  const sendFriendChallengeReject = (challengeId: number, senderId: number) => {
+    sendMessage({
+      type: MessageType.FriendChallengeReject,
+      challengeId,
+      senderId,
+    } as any)
+  }
+
   // 新增：获取当前房间ID的方法
   const getCurrentRoomId = () => currentRoomId.value
 
@@ -383,5 +459,9 @@ export function useWebSocket(): WebSocketService {
     sendDrawResponse,
     getCurrentRoomId, // 新增导出获取当前房间ID的方法
     sendFriendRequest,
+    sendFriendChallengeInvite,
+    sendFriendChallengeCancel,
+    sendFriendChallengeAccept,
+    sendFriendChallengeReject,
   }
 }

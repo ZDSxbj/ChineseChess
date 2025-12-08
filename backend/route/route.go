@@ -48,6 +48,7 @@ func SetupRouter() *gin.Engine {
 	friend := controller.NewFriendController(service.NewFriendService())
 	chat := controller.NewChatController(service.NewChatService())
 	room := controller.NewRoomController(service.NewRoomService())
+	fc := controller.NewFriendChallengeController()
 	// 设置路由组
 	api := r.Group("/api")
 	// 静态资源：通过 /api/uploads 访问后端本地的 ./uploads 目录
@@ -77,6 +78,9 @@ func SetupRouter() *gin.Engine {
 	userRoute.DELETE("/friend-requests/:id", friend.DeleteFriendRequest)
 	userRoute.GET("/friend-requests/check", friend.CheckFriendRequest)
 	userRoute.DELETE("/friends/:friendId", friend.DeleteFriend)
+
+	// 好友挑战（用于初始化加载待处理挑战）
+	userRoute.GET("/friend-challenges", fc.ListIncoming)
 
 	// 聊天相关路由
 	userRoute.GET("/friends/:relationId/messages", chat.GetMessages)

@@ -18,8 +18,6 @@ import (
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/room"
 	dtouser "chinese-chess-backend/dto/user"
-	"chinese-chess-backend/model/user"
-
 	modeluser "chinese-chess-backend/model/user"
 	"chinese-chess-backend/service"
 	"chinese-chess-backend/utils"
@@ -157,6 +155,8 @@ func (ch *ChessHub) Run() {
 				}
 				ch.mu.Unlock()
 				database.DeleteValue(fmt.Sprint(client.Id))
+				// 清理与该用户相关的挑战记录
+				_ = service.NewFriendChallengeService().DeleteAllByUser(uint(client.Id))
 			case commandMatch:
 				client := cmd.client
 				ch.mu.Lock()
@@ -260,7 +260,7 @@ func (ch *ChessHub) Run() {
 				}
 
 				// 获取用户信息
-				var currentUser, nextUser user.User
+				var currentUser, nextUser modeluser.User
 				database.GetMysqlDb().First(&currentUser, room.Current.Id)
 				database.GetMysqlDb().First(&nextUser, room.Next.Id)
 
@@ -457,6 +457,133 @@ func (ch *ChessHub) Run() {
 				ch.sendMessage(client, NormalMessage{
 					BaseMessage: BaseMessage{Type: messageCreate},
 				})
+				return nil
+			case commandFriendChallengeInvite:
+				// payload: map[string]any{"receiverId":uint, "relationId":uint}
+				p := cmd.payload.(map[string]any)
+				receiverId := int(p["receiverId"].(uint))
+				relationId := p["relationId"].(uint)
+				// 创建房间并标记为好友对战
+				r := NewChessRoom()
+				r.GameType = 2
+				r.join(cmd.client)
+				ch.Rooms[r.Id] = r
+				// 插入挑战记录（带房间ID）
+				fcSvc := service.NewFriendChallengeService()
+				rec, _ := fcSvc.Create(relationId, uint(cmd.client.Id), uint(receiverId), r.Id)
+				// 获取发送者名称
+				var senderName string
+				{
+					var u modeluser.User
+					database.GetMysqlDb().First(&u, cmd.client.Id)
+					senderName = u.Name
+				}
+				// 发送邀请给接收方
+				_ = ch.SendToUser(receiverId, &FriendChallengeMessage{
+					BaseMessage: BaseMessage{Type: messageFriendChallengeInvite},
+					ChallengeId: rec.ID,
+					RelationId:  relationId,
+					SenderId:    uint(cmd.client.Id),
+					ReceiverId:  uint(receiverId),
+					SenderName:  senderName,
+					RoomId:      r.Id,
+				})
+				// 给发送方一个回执
+				ch.sendMessage(cmd.client, &FriendChallengeMessage{
+					BaseMessage: BaseMessage{Type: messageFriendChallengeCreated},
+					ChallengeId: rec.ID,
+					RelationId:  relationId,
+					SenderId:    uint(cmd.client.Id),
+					ReceiverId:  uint(receiverId),
+					RoomId:      r.Id,
+				})
+				// 自动保存一条社交聊天消息
+				chatSvc := service.NewChatService()
+				if msg, err := chatSvc.SaveMessage(relationId, uint(cmd.client.Id), uint(receiverId), "我们一起来下棋吧"); err == nil {
+					// 推送给接收方
+					_ = ch.SendToUser(receiverId, &ChatMessage{
+						BaseMessage: BaseMessage{Type: messageChatMessage},
+						Content:     msg.Content,
+						Sender:      senderName,
+						RelationId:  relationId,
+						SenderId:    uint(cmd.client.Id),
+						MessageId:   msg.ID,
+						CreatedAt:   msg.CreatedAt.Unix(),
+					})
+					// 同时回显给发送方，使其聊天窗口即时更新
+					ch.sendMessage(cmd.client, &ChatMessage{
+						BaseMessage: BaseMessage{Type: messageChatMessage},
+						Content:     msg.Content,
+						Sender:      senderName,
+						RelationId:  relationId,
+						SenderId:    uint(cmd.client.Id),
+						MessageId:   msg.ID,
+						CreatedAt:   msg.CreatedAt.Unix(),
+					})
+				}
+				return nil
+			case commandFriendChallengeCancel:
+				p := cmd.payload.(map[string]any)
+				challengeId := p["challengeId"].(uint)
+				receiverId := int(p["receiverId"].(uint))
+				service.NewFriendChallengeService().DeleteByID(challengeId)
+				_ = ch.SendToUser(receiverId, &FriendChallengeMessage{BaseMessage: BaseMessage{Type: messageFriendChallengeCancel}, ChallengeId: challengeId, SenderId: uint(cmd.client.Id)})
+				// 清理房间（若仍然只有发送方在房间中）
+				ch.mu.Lock()
+				room := ch.Rooms[cmd.client.RoomId]
+				if room != nil && (room.Next == nil || room.Current == nil) {
+					room.clear()
+					delete(ch.Rooms, cmd.client.RoomId)
+				}
+				ch.mu.Unlock()
+				return nil
+			case commandFriendChallengeAccept:
+				p := cmd.payload.(map[string]any)
+				challengeId := p["challengeId"].(uint)
+				senderId := int(p["senderId"].(uint))
+				roomId := int(p["roomId"].(int))
+				// 校验对方仍在线且挑战存在
+				ch.mu.Lock()
+				_, ok := ch.Clients[senderId]
+				ch.mu.Unlock()
+				exists, _ := service.NewFriendChallengeService().Exists(challengeId)
+				if !ok || !exists {
+					ch.sendMessage(cmd.client, NormalMessage{BaseMessage: BaseMessage{Type: messageNormal}, Message: "对方已离开或邀请已撤销"})
+					return nil
+				}
+				// 删除挑战记录
+				_ = service.NewFriendChallengeService().DeleteByID(challengeId)
+				// 通知发送方：已接受
+				_ = ch.SendToUser(senderId, &FriendChallengeMessage{BaseMessage: BaseMessage{Type: messageFriendChallengeAccept}, ChallengeId: challengeId, ReceiverId: uint(cmd.client.Id)})
+				// 让接收方加入房间（通过内部命令）
+				ch.commands <- hubCommand{commandType: commandJoin, client: cmd.client, payload: joinMessage{BaseMessage: BaseMessage{Type: messageJoin}, RoomId: roomId}}
+				return nil
+			case commandFriendChallengeReject:
+				p := cmd.payload.(map[string]any)
+				challengeId := p["challengeId"].(uint)
+				senderId := int(p["senderId"].(uint))
+				_ = service.NewFriendChallengeService().DeleteByID(challengeId)
+				_ = ch.SendToUser(senderId, &FriendChallengeMessage{BaseMessage: BaseMessage{Type: messageFriendChallengeReject}, ChallengeId: challengeId, ReceiverId: uint(cmd.client.Id)})
+				// 给发送方一条社交消息：不好意思，我们下次再战吧
+				var relationId uint
+				// 尝试根据 sender/receiver 的好友关系推断 relationId（简单查 friend 表，两方向）
+				db := database.GetMysqlDb()
+				db.Raw("SELECT id FROM friend WHERE (user_id=? AND friend_id=?) OR (user_id=? AND friend_id=?) LIMIT 1", senderId, cmd.client.Id, cmd.client.Id, senderId).Scan(&relationId)
+				if relationId > 0 {
+					chatSvc := service.NewChatService()
+					if msg, err := chatSvc.SaveMessage(relationId, uint(cmd.client.Id), uint(senderId), "不好意思，我们下次再战吧"); err == nil {
+						var senderName string
+						{
+							var u modeluser.User
+							db.First(&u, cmd.client.Id)
+							senderName = u.Name
+						}
+						// 推送给原邀请方
+						_ = ch.SendToUser(senderId, &ChatMessage{BaseMessage: BaseMessage{Type: messageChatMessage}, Content: msg.Content, Sender: senderName, RelationId: relationId, SenderId: uint(cmd.client.Id), MessageId: msg.ID, CreatedAt: msg.CreatedAt.Unix()})
+						// 同时回显给拒绝方（本客户端）
+						ch.sendMessage(cmd.client, &ChatMessage{BaseMessage: BaseMessage{Type: messageChatMessage}, Content: msg.Content, Sender: senderName, RelationId: relationId, SenderId: uint(cmd.client.Id), MessageId: msg.ID, CreatedAt: msg.CreatedAt.Unix()})
+					}
+				}
 				return nil
 			// 新增：处理悔棋请求命令
 			case commandRegretRequest:
@@ -912,6 +1039,38 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 				accepted: resp.Accepted,
 			},
 		}
+	case messageFriendChallengeInvite:
+		// 期待前端发送 { receiverId, relationId }
+		var m FriendChallengeMessage
+		if err := json.Unmarshal(rawMessage, &m); err != nil {
+			return fmt.Errorf("解析挑战邀请失败: %v", err)
+		}
+		// 对方不在线直接提示（前端也会判断，但这里兜底）
+		ch.mu.Lock()
+		_, ok := ch.Clients[int(m.ReceiverId)]
+		ch.mu.Unlock()
+		if !ok {
+			return client.sendMessage(NormalMessage{BaseMessage: BaseMessage{Type: messageNormal}, Message: "对方不在线，需等待对方在线才可对战"})
+		}
+		ch.commands <- hubCommand{commandType: commandFriendChallengeInvite, client: client, payload: map[string]any{"receiverId": m.ReceiverId, "relationId": m.RelationId}}
+	case messageFriendChallengeCancel:
+		var m FriendChallengeMessage
+		if err := json.Unmarshal(rawMessage, &m); err != nil {
+			return fmt.Errorf("解析挑战撤销失败: %v", err)
+		}
+		ch.commands <- hubCommand{commandType: commandFriendChallengeCancel, client: client, payload: map[string]any{"challengeId": m.ChallengeId, "receiverId": m.ReceiverId}}
+	case messageFriendChallengeAccept:
+		var m FriendChallengeMessage
+		if err := json.Unmarshal(rawMessage, &m); err != nil {
+			return fmt.Errorf("解析挑战接受失败: %v", err)
+		}
+		ch.commands <- hubCommand{commandType: commandFriendChallengeAccept, client: client, payload: map[string]any{"challengeId": m.ChallengeId, "senderId": m.SenderId, "roomId": m.RoomId}}
+	case messageFriendChallengeReject:
+		var m FriendChallengeMessage
+		if err := json.Unmarshal(rawMessage, &m); err != nil {
+			return fmt.Errorf("解析挑战拒绝失败: %v", err)
+		}
+		ch.commands <- hubCommand{commandType: commandFriendChallengeReject, client: client, payload: map[string]any{"challengeId": m.ChallengeId, "senderId": m.SenderId}}
 	}
 	return nil
 }

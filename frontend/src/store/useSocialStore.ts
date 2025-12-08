@@ -62,24 +62,19 @@ export const useSocialStore = defineStore('social', () => {
     channel.on('NET:CHAT:MESSAGE', (data: any) => {
       try {
         const { relationId } = data || {}
-        // 如果当前正查看该会话，则直接标为已读（后端）且不增加总数
-        if (relationId && activeRelationId.value === relationId) {
-          // 标记后端为已读
-          // eslint-disable-next-line style/max-statements-per-line
-          try { markRead(relationId) }
-          catch { /* ignore */ }
-        }
-        else {
-          // 非活跃会话，增加全局未读数
-          increase(1)
+        // 仅社交会话（存在 relationId）参与未读统计；房间内聊天不计入
+        if (typeof relationId === 'number' && relationId > 0) {
+          // 如果当前正查看该会话，则直接标为已读（后端）且不增加总数
+          if (activeRelationId.value === relationId) {
+            try { markRead(relationId) } catch { /* ignore */ }
+          } else {
+            increase(1)
+          }
         }
       }
       finally {
         // 通知所有注册的回调（用于让界面追加消息或更新单个好友的 unreadCount）
-        listeners.forEach((cb) => {
-          // eslint-disable-next-line style/max-statements-per-line
-          try { cb(data) } catch { /* ignore individual listener errors */ }
-        })
+        listeners.forEach((cb) => { try { cb(data) } catch { /* ignore */ } })
       }
     })
     // 当收到好友申请推送时，增加未读计数

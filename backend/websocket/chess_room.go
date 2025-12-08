@@ -26,6 +26,7 @@ type ChessRoom struct {
 	RegretRequester *Client    // 新增：记录悔棋请求发起方
 	RecordSaved     bool       // 标记对局记录是否已保存，防止重复保存
 	mu              sync.Mutex // 保护History等共享资源
+	GameType        int        // 0=随机匹配,1=人机,2=好友对战
 }
 
 func NewChessRoom() *ChessRoom {
@@ -40,6 +41,7 @@ func NewChessRoom() *ChessRoom {
 		History:     make([]Position, 0),
 		StartTime:   time.Time{},
 		RecordSaved: false,
+		GameType:    0,
 	}
 }
 
@@ -189,7 +191,7 @@ func saveGameRecord(room *ChessRoom, winner clientRole) {
 		History:   historyStr,
 		RedFlag:   false,
 		BlackFlag: false,
-		GameType:  0,
+		GameType:  room.GameType,
 	}
 
 	if err := database.GetMysqlDb().Create(&rec).Error; err != nil {

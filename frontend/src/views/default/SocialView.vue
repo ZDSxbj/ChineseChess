@@ -5,10 +5,11 @@ import type { UserInfo } from '@/api/user/user'
 import { inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getMessages, markRead, sendMessage } from '@/api/user/chat'
 import { getUserInfo } from '@/api/user/get_info'
-import { acceptFriendRequest, checkFriendRequest, deleteFriend, deleteFriendRequest, getFriendRequests, getFriends } from '@/api/user/social'
+import { acceptFriendRequest, checkFriendRequest, deleteFriend, deleteFriendRequest, getFriendChallenges, getFriendRequests, getFriends } from '@/api/user/social'
 import FriendCard from '@/components/FriendCard.vue'
 import FriendRequestCard from '@/components/FriendRequestCard.vue'
 import { showMsg } from '@/components/MessageBox'
+import { persistChallengeModals, restoreChallengeModals } from '@/store/challengeModalStore'
 import { useSocialStore } from '@/store/useSocialStore'
 // channel handling is centralized in social store
 import { useUserStore } from '@/store/useStore'
@@ -35,6 +36,14 @@ let _social_onMsg: ((data: any) => void) | null = null
 const _base = import.meta.env.BASE_URL || '/'
 const base = _base.endsWith('/') ? _base : `${_base}/`
 const defaultAvatar = `${base}images/default_avatar.png`
+
+// 好友挑战：发送方等待窗口
+const waitingModal = ref<{ visible: boolean, challengeId?: number, receiverId?: number }>({ visible: false })
+// 好友挑战：接收方响应窗口
+const responseModal = ref<{ visible: boolean, challengeId?: number, senderId?: number, senderName?: string, roomId?: number }>({ visible: false })
+// 模态状态持久化改由 store 提供函数
+// 记录每个发送方的最近一次挑战元信息
+const incomingChallengeMap = ref<Map<number, { challengeId: number, roomId: number, senderName?: string }>>(new Map())
 
 async function loadMessagesForSelected() {
   const sid = selectedFriendId.value
@@ -300,6 +309,30 @@ async function load(isPolling = false) {
         // ignore
       }
     }
+    // 无论好友列表是否变化，都初始化挑战标签：拉取我收到的挑战请求（receiver=me）
+    try {
+      const chResp: any = await getFriendChallenges()
+      const challenges = chResp.challenges || []
+      const set = new Set<number>()
+      // 重置并填充 incomingChallengeMap
+      incomingChallengeMap.value.clear()
+      challenges.forEach((c: any) => {
+        // 兼容后端字段命名（Go 默认导出字段为 PascalCase）
+        const challengeId = c.id ?? c.ID
+        const senderId = c.senderId ?? c.SenderID
+        const roomId = (c as any).roomId ?? c.RoomID ?? 0
+        if (senderId) {
+          set.add(Number(senderId))
+          incomingChallengeMap.value.set(Number(senderId), { challengeId: Number(challengeId), roomId: Number(roomId) })
+        }
+      })
+      friends.value.forEach((f) => {
+        // 若当前就在该好友的活跃聊天或响应弹窗已打开，则不显示标签（避免轮询覆盖）
+        const isActiveChat = selectedFriendId.value === f.id
+        const isResponding = responseModal.value.visible && responseModal.value.senderId === f.id
+        ;(f as any).challengePending = (!isActiveChat && !isResponding) && set.has(f.id)
+      })
+    } catch {}
     error.value = null
   }
   catch (e) {
@@ -354,6 +387,14 @@ function onSelectFriend(id: number) {
   socialStore.setActiveRelationId(friend?.relationId || null)
   // 加载该好友的历史消息并标记为已读
   loadMessagesForSelected()
+  // 若有挑战挂起，清除标签并弹出响应窗口
+  if (friend && (friend as any).challengePending) {
+    (friend as any).challengePending = false
+    const meta = incomingChallengeMap.value.get(friend.id)
+    if (meta) {
+      responseModal.value = { visible: true, challengeId: meta.challengeId, senderId: friend.id, senderName: friend.name, roomId: meta.roomId }
+    }
+  }
 }
 
 function requestDelete(id: number) {
@@ -381,7 +422,66 @@ async function confirmDelete() {
   }
 }
 
+// 点击对弈按钮
+function onClickChallenge() {
+  const sid = selectedFriendId.value
+  if (!sid || !ws) return
+  const f = friends.value.find(fr => fr.id === sid)
+  if (!f || !f.relationId) return
+  if (!f.online) {
+    showMsg('对方不在线，需等待对方在线才可对战')
+    return
+  }
+  // 发起挑战，后端会创建房间并推给对方
+  try {
+    ws.sendFriendChallengeInvite(f.id, f.relationId)
+    // 打开等待窗口（challengeId 发送后由取消时需要，先缓存在收到服务端回执/事件前用不到，这里只显示等待）
+    waitingModal.value = { visible: true }
+    persistChallengeModals(waitingModal.value, responseModal.value)
+  } catch {}
+}
+
+function onCancelWaiting() {
+  if (!waitingModal.value.visible) return
+  if (waitingModal.value.challengeId && waitingModal.value.receiverId && ws) {
+    ws.sendFriendChallengeCancel(waitingModal.value.challengeId, waitingModal.value.receiverId)
+  }
+  waitingModal.value = { visible: false }
+  persistChallengeModals(waitingModal.value, responseModal.value)
+}
+
+function onAcceptChallenge() {
+  const meta = responseModal.value
+  if (!meta.visible || !ws) return
+  if (!meta.challengeId || !meta.senderId || !meta.roomId) {
+    responseModal.value.visible = false
+    return
+  }
+  // 通知后端接受，并加入房间
+  ws.sendFriendChallengeAccept(meta.challengeId, meta.senderId, meta.roomId)
+  // 客户端直接加入房间，确保及时进入对战
+  ws.join(meta.roomId)
+  responseModal.value.visible = false
+  persistChallengeModals(waitingModal.value, responseModal.value)
+}
+
+function onRejectChallenge() {
+  const meta = responseModal.value
+  if (!meta.visible || !ws) return
+  if (!meta.challengeId || !meta.senderId) {
+    responseModal.value.visible = false
+    return
+  }
+  ws.sendFriendChallengeReject(meta.challengeId, meta.senderId)
+  responseModal.value.visible = false
+  persistChallengeModals(waitingModal.value, responseModal.value)
+}
+
 onMounted(() => {
+  // 刷新恢复模态状态
+  const restored = restoreChallengeModals()
+  if (restored.waiting) waitingModal.value = restored.waiting
+  if (restored.response) responseModal.value = restored.response
   load()
   // 轮询作为后备方案，建议服务端通过 WebSocket 推送在线状态更新以减少轮询
   pollTimer = window.setInterval(() => {
@@ -422,6 +522,57 @@ onMounted(() => {
       // 将新申请放到最前面
       friendRequests.value.unshift(it)
     } catch (e) {}
+  })
+
+  // 好友对弈邀请
+  channel.on('NET:FRIEND:CHALLENGE:INVITE', (payload: any) => {
+    try {
+      incomingChallengeMap.value.set(payload.senderId, { challengeId: payload.challengeId, roomId: payload.roomId, senderName: payload.senderName })
+      const f = friends.value.find(fr => fr.id === payload.senderId)
+      if (f) {
+        if (selectedFriendId.value === f.id) {
+          ;(f as any).challengePending = false
+          responseModal.value = { visible: true, challengeId: payload.challengeId, senderId: payload.senderId, senderName: payload.senderName, roomId: payload.roomId }
+          persistChallengeModals(waitingModal.value, responseModal.value)
+        } else {
+          ;(f as any).challengePending = true
+        }
+      }
+    } catch {}
+  })
+
+  // 对方撤销挑战
+  channel.on('NET:FRIEND:CHALLENGE:CANCEL', (payload: any) => {
+    try {
+      const senderId = Number(payload.senderId)
+      incomingChallengeMap.value.delete(senderId)
+      const f = friends.value.find(fr => fr.id === senderId)
+      if (f) (f as any).challengePending = false
+      if (responseModal.value.visible && responseModal.value.senderId === senderId) {
+        responseModal.value.visible = false
+        persistChallengeModals(waitingModal.value, responseModal.value)
+      }
+    } catch {}
+  })
+
+  // 发送方收到同意
+  channel.on('NET:FRIEND:CHALLENGE:ACCEPT', () => {
+    waitingModal.value.visible = false
+    persistChallengeModals(waitingModal.value, responseModal.value)
+  })
+
+  // 发送方收到拒绝
+  channel.on('NET:FRIEND:CHALLENGE:REJECT', () => {
+    waitingModal.value.visible = false
+    persistChallengeModals(waitingModal.value, responseModal.value)
+  })
+
+  // 发送方收到创建回执：记录 challengeId 以支持撤销
+  channel.on('NET:FRIEND:CHALLENGE:CREATED', (payload: any) => {
+    try {
+      waitingModal.value = { visible: true, challengeId: payload.challengeId, receiverId: payload.receiverId }
+      persistChallengeModals(waitingModal.value, responseModal.value)
+    } catch {}
   })
 
   // 注册消息回调，用于将消息追加到当前打开的会话或更新对应好友的 unreadCount
@@ -658,7 +809,7 @@ onBeforeUnmount(() => {
                 <div class="i-carbon-send-alt"></div>
                 发送
               </button>
-              <button class="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all font-medium flex items-center justify-center gap-2 active:scale-95">
+              <button @click="onClickChallenge" class="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all font-medium flex items-center justify-center gap-2 active:scale-95">
                 <div class="i-carbon-game-console"></div>
                 对弈
               </button>
@@ -708,6 +859,30 @@ onBeforeUnmount(() => {
           <button class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50" @click="closeAddFriendModal">取消</button>
           <button :disabled="addModalSubmitting" class="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60" @click="sendAddFriend">发送</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 发送方等待对方进入房间 -->
+  <div v-if="waitingModal.visible" class="fixed inset-0 z-[95] flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative z-10 bg-white p-6 rounded-xl shadow-2xl w-[360px]">
+      <h3 class="text-lg font-semibold mb-2">请等待好友进入房间</h3>
+      <p class="text-gray-600 mb-4">正在等待对方响应...</p>
+      <div class="flex justify-end gap-2">
+        <button class="px-4 py-2 rounded-lg border border-gray-300" @click="onCancelWaiting">取消等待</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 接收方响应弹窗 -->
+  <div v-if="responseModal.visible" class="fixed inset-0 z-[96] flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/40"></div>
+    <div class="relative z-10 bg-white p-6 rounded-xl shadow-2xl w-[380px]">
+      <h3 class="text-lg font-semibold mb-3">{{ responseModal.senderName || '好友' }} 邀请你进入房间</h3>
+      <div class="flex justify-end gap-3">
+        <button class="px-4 py-2 rounded-lg border border-gray-300" @click="onRejectChallenge">拒绝</button>
+        <button class="px-4 py-2 rounded-lg bg-green-500 text-white" @click="onAcceptChallenge">接受</button>
       </div>
     </div>
   </div>

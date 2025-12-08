@@ -19,6 +19,11 @@ const (
 	commandChatMessage    CommendType = 15       // 聊天消息命令
 	commandDrawRequest    CommendType = 16       // 和棋请求命令
 	commandDrawResponse   CommendType = 17       // 和棋响应命令
+	// 好友挑战相关命令
+	commandFriendChallengeInvite CommendType = 18
+	commandFriendChallengeCancel CommendType = 19
+	commandFriendChallengeAccept CommendType = 20
+	commandFriendChallengeReject CommendType = 21
 )
 
 type moveRequest struct {
