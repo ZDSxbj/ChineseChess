@@ -19,6 +19,7 @@ class ChessBoard {
   private selfColor: ChessColor = 'red'
   public currentRole: ChessRole = 'self'
   private isNetPlay: boolean = false
+  private isAIPlay: boolean = false // 新增：标识是否为AI对战模式
   private clickCallback: (event: MouseEvent) => void = () => {}
   // 新增：存储走棋历史（记录移动前的状态）
   private moveHistory: Array<{
@@ -26,6 +27,8 @@ class ChessBoard {
     to: ChessPosition
     capturedPiece: ChessPiece | null// 被吃掉的棋子（如果有）
     currentRole: ChessRole // 记录当前回合角色，用于悔棋后恢复
+    pieceName?: string
+    pieceColor?: ChessColor
   }> = []
   // 对战音效（选中与落子）
   private selectAudio?: HTMLAudioElement
@@ -66,6 +69,114 @@ class ChessBoard {
       console.warn('Audio init failed', e)
     }
     this.listenEvent()
+  }
+
+  // Public API: 在本地模式下应用来自 AI 的移动（from/to 使用内部坐标 {x,y}）
+  public applyAIMove(from: ChessPosition, to: ChessPosition): boolean {
+    console.log('applyAIMove called with', from, to)
+    const piece = this.board[from.x] && this.board[from.x][from.y]
+    console.log('piece at from coordinate:', piece)
+    const targetPiece = this.board[to.x][to.y]
+    if (!piece) {
+      console.error('applyAIMove failed: no piece at from position', from)
+      return false
+    }
+
+    // 防止自吃
+    if (targetPiece && targetPiece.color === piece.color) {
+      console.error('applyAIMove failed: target occupied by same color', { from, to, piece, targetPiece })
+      return false
+    }
+
+    if (!piece.isMoveValid(to, this.board)) {
+      console.error('applyAIMove failed: piece.isMoveValid returned false', { pieceName: piece.name, from: piece.position, to })
+      return false
+    }
+
+    // 模拟移动检查自将
+    const savedPiece = this.board[to.x][to.y]
+    const originalPos = { ...piece.position }
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
+    piece.position = to
+
+    const wouldBeInCheck = this.isInCheck(piece.color)
+
+    // 恢复
+    piece.position = originalPos
+    this.board[from.x][from.y] = piece
+    if (savedPiece) this.board[to.x][to.y] = savedPiece
+    else delete this.board[to.x][to.y]
+
+    if (wouldBeInCheck) {
+      console.error('applyAIMove failed: move would leave mover in check', { piece: piece.name, from, to })
+      return false
+    }
+
+    // 记录历史并应用移动（包含棋子名与阵营，便于 UI 恢复显示）
+    this.moveHistory.push({ from: { ...from }, to: { ...to }, capturedPiece: targetPiece || null, currentRole: this.currentRole, pieceName: piece.name, pieceColor: piece.color })
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
+    piece.move(to)
+
+    // 发出最近一步走子事件（包含棋子名和阵营），以便 UI 显示最近落子
+    try {
+      channel.emit('BOARD:MOVE:MADE', { from, to, pieceName: piece.name, pieceColor: piece.color })
+    } catch (e) {
+      console.warn('BOARD:MOVE:MADE emit failed', e)
+    }
+
+    // 检查对方被将军或将死
+    const opponentColor = piece.color === 'red' ? 'black' : 'red'
+    const opponentInCheck = this.isInCheck(opponentColor)
+    // 本地规则判断
+    const opponentCheckmatedLocal = opponentInCheck && this.isCheckmate(opponentColor)
+    // 使用 engine 作为补充判断（若存在），解决规则判定差异问题
+    let opponentCheckmatedEngine = false
+    try {
+      // @ts-ignore
+      if ((window as any).logic && typeof (window as any).logic.isCheckmate === 'function') {
+        // engine 接受 board[row][col] 的形式
+        opponentCheckmatedEngine = (window as any).logic.isCheckmate(this.getCurrentBoard(), opponentColor)
+      }
+    } catch (e) {
+      console.warn('Engine checkmate validation failed', e)
+    }
+    const opponentCheckmated = opponentCheckmatedLocal || opponentCheckmatedEngine
+
+    if (opponentCheckmated) {
+      const moverColor = piece.color
+      if (this.isNetPlay) channel.emit('GAME:END', { winner: moverColor, online: true })
+      else channel.emit('LOCAL:GAME:END', { winner: moverColor })
+      this.end(moverColor)
+      return true
+    } else if (opponentInCheck) {
+        if (this.isAIPlay) {
+          if (opponentColor === this.selfColor) {
+            showMsg('你被将军了！')
+          } else {
+            showMsg('AI被将军！')
+          }
+        } else {
+          showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
+        }
+    }
+
+    // 切换回合（AI/本地/网络统一行为）
+    this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    // 通知 UI 当前回合改变
+    try {
+      channel.emit('BOARD:ROLE:CHANGE', { currentRole: this.currentRole })
+    } catch (e) {
+      console.warn('BOARD:ROLE:CHANGE emit failed', e)
+    }
+    saveGameState({ isNetPlay: this.isNetPlay, selfColor: this.selfColor, moveHistory: this.moveHistory, currentRole: this.currentRole })
+    return true
+  }
+
+  // 返回指定坐标的棋子（若无返回 null）
+  public getPieceAt(pos: ChessPosition) {
+    return (this.board[pos.x] && this.board[pos.x][pos.y]) || null
   }
 
   public isNetworkPlay(): boolean {
@@ -185,7 +296,7 @@ class ChessBoard {
   }
 
   // 检测指定颜色是否被将死
-  private isCheckmate(color: ChessColor): boolean {
+  public isCheckmate(color: ChessColor): boolean {
     return this.isInCheck(color) && !this.canEscapeCheck(color)
   }
 
@@ -197,7 +308,19 @@ class ChessBoard {
     const enemyColor = this.selfColor === 'red' ? 'black' : 'red'
     const currentColor = this.currentRole === 'self' ? this.selfColor : enemyColor
     
-    if (this.isCheckmate(currentColor)) {
+    // 先用本地判定
+    let currentIsCheckmatedLocal = this.isCheckmate(currentColor)
+    let currentIsCheckmatedEngine = false
+    try {
+      // @ts-ignore
+      if ((window as any).logic && typeof (window as any).logic.isCheckmate === 'function') {
+        currentIsCheckmatedEngine = (window as any).logic.isCheckmate(this.getCurrentBoard(), currentColor)
+      }
+    } catch (e) {
+      console.warn('Engine checkmate validation failed', e)
+    }
+
+    if (currentIsCheckmatedLocal || currentIsCheckmatedEngine) {
       // 当前回合方被将死，对方获胜
       const winner = currentColor === 'red' ? 'black' : 'red'
       showMsg(`${currentColor === 'red' ? '红方' : '黑方'}被将死！`)
@@ -261,8 +384,8 @@ class ChessBoard {
       if (piece.color !== (this.currentRole === 'self' ? selfColor : enemyColor)) {
         return
       }
-      // 不是自己的回合不能选中
-      if (this.isNetPlay) {
+      // 网络模式或AI模式下，不是自己的回合不能选中
+      if (this.isNetPlay || this.isAIPlay) {
         if (this.currentRole === 'enemy') {
           return
         }
@@ -312,12 +435,14 @@ class ChessBoard {
       showMsg('不能送将！')
       return
     }
-    // 记录历史
+    // 记录历史（包含棋子名/阵营，便于落子文本恢复）
     this.moveHistory.push({
       from: { ...from },
       to: { ...to },
       capturedPiece: targetPiece || null,
       currentRole: this.currentRole, // 记录当前角色，悔棋后需恢复
+      pieceName: piece.name,
+      pieceColor: piece.color,
     })
 
     // 先在数据结构上应用移动（模拟新的棋盘状态），再绘制
@@ -338,11 +463,29 @@ class ChessBoard {
     if (this.currentRole === 'self') {
       this.isNetPlay && channel.emit('NET:CHESS:MOVE:END', { from, to })
     }
+    // 通知 UI 最近一步走子（本地/网络/AI 都需要）
+    try {
+      channel.emit('BOARD:MOVE:MADE', { from, to, pieceName: piece.name, pieceColor: piece.color })
+    } catch (e) {
+      console.warn('BOARD:MOVE:MADE emit failed', e)
+    }
 
     // 检查对方是否被将军或将死
     const opponentColor = piece.color === 'red' ? 'black' : 'red'
     const opponentInCheck = this.isInCheck(opponentColor)
-    const opponentCheckmated = opponentInCheck && this.isCheckmate(opponentColor)
+    // 本地规则判断
+    const opponentCheckmatedLocal = opponentInCheck && this.isCheckmate(opponentColor)
+    // 使用 engine 作为补充判断（若存在），解决规则判定差异问题
+    let opponentCheckmatedEngine = false
+    try {
+      // @ts-ignore
+      if ((window as any).logic && typeof (window as any).logic.isCheckmate === 'function') {
+        opponentCheckmatedEngine = (window as any).logic.isCheckmate(this.getCurrentBoard(), opponentColor)
+      }
+    } catch (e) {
+      console.warn('Engine checkmate validation failed', e)
+    }
+    const opponentCheckmated = opponentCheckmatedLocal || opponentCheckmatedEngine
 
     if (opponentCheckmated) {
       // 对方被将死，移动方获胜
@@ -355,6 +498,7 @@ class ChessBoard {
       this.end(moverColor)
       return
     } else if (opponentInCheck) {
+<<<<<<< Updated upstream
       // 对方被将军或我方被将军（取决于当前移动方），播放提示并响铃
       showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
       try {
@@ -373,6 +517,18 @@ class ChessBoard {
           }
         } catch {}
       }
+=======
+      // 对方被将军，显示提示
+        if (this.isAIPlay) {
+          if (opponentColor === this.selfColor) {
+            showMsg('你被将军了！')
+          } else {
+            showMsg('AI被将军！')
+          }
+        } else {
+          showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
+        }
+>>>>>>> Stashed changes
     }
 
     // 如果直接吃掉对方的将，立即判定结束（移动方胜）
@@ -390,6 +546,12 @@ class ChessBoard {
     // 切换回合
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
     // showMsg(`现在是${this.currentRole}的回合`)
+    // 通知 UI 当前回合已改变
+    try {
+      channel.emit('BOARD:ROLE:CHANGE', { currentRole: this.currentRole })
+    } catch (e) {
+      console.warn('BOARD:ROLE:CHANGE emit failed', e)
+    }
     saveGameState({
       isNetPlay: this.isNetPlay,
       selfColor: this.selfColor,
@@ -403,6 +565,8 @@ class ChessBoard {
       setTimeout(() => {
         this.checkCurrentTurnCheckmate()
       }, 10)
+      // 触发GAME:MOVE事件用于AI对战
+      channel.emit('GAME:MOVE')
     }
   }
 
@@ -424,6 +588,13 @@ class ChessBoard {
     }
     this.drawChesses()
     this.currentRole = this.currentRole === 'self' ? 'enemy' : 'self'
+    // 通知 UI 当前回合已改变（悔棋后）
+    try {
+      channel.emit('BOARD:ROLE:CHANGE', { currentRole: this.currentRole })
+    } catch (e) {
+      console.warn('BOARD:ROLE:CHANGE emit failed', e)
+    }
+
     saveGameState({
       isNetPlay: this.isNetPlay,
       selfColor: this.selfColor,
@@ -431,6 +602,39 @@ class ChessBoard {
       currentRole: this.currentRole,
     })
     return true
+  }
+
+  // 回退到玩家上一步之前：优先撤销 AI 步与玩家步，保证回到玩家移动前的局面
+  // 返回撤销的步数（0/1/2）
+  public regretLastTurn(): number {
+    if (!this.moveHistory || this.moveHistory.length === 0) return 0
+
+    const last = this.moveHistory[this.moveHistory.length - 1]
+    let undone = 0
+
+    // 如果最后一步是 AI 的（enemy），尝试撤销 AI + 玩家 两步
+    if (last.currentRole === 'enemy') {
+      // 撤销 AI 步
+      if (this.regretMove()) {
+        undone++
+      }
+      // 再撤销玩家步（若存在）
+      if (this.moveHistory.length > 0) {
+        if (this.regretMove()) {
+          undone++
+        }
+      }
+    } else {
+      // 最后一步是玩家的，撤销一步
+      if (this.regretMove()) {
+        undone++
+      }
+    }
+
+    // 确保回到玩家回合
+    this.currentRole = 'self'
+    saveGameState({ isNetPlay: this.isNetPlay, selfColor: this.selfColor, moveHistory: this.moveHistory, currentRole: this.currentRole })
+    return undone
   }
 
   // 新增：恢复游戏状态的方法
@@ -468,6 +672,121 @@ class ChessBoard {
   // 新增：手动设置当前执行方（用于悔棋后切换）
   public setCurrentRole(role: ChessRole) {
     this.currentRole = role
+    try {
+      channel.emit('BOARD:ROLE:CHANGE', { currentRole: this.currentRole })
+    } catch (e) {
+      console.warn('BOARD:ROLE:CHANGE emit failed', e)
+    }
+  }
+
+  // 获取当前棋盘状态（用于AI计算）
+  public getCurrentBoard(): any {
+    const boardArray = Array.from({ length: 10 }, () => Array(9).fill(null))
+    
+    // 根据棋子名称映射到logic.js的简称（兼容英文与中文名称）
+    const nameToAbbr: Record<string, string> = {
+      // 中文
+      '將': 'k', '帅': 'k', '帥': 'k',
+      '士': 'a', '仕': 'a',
+      '象': 'b', '相': 'b',
+      '馬': 'n', '傌': 'n', '马': 'n',
+      '車': 'r', '俥': 'r', '车': 'r',
+      '炮': 'c', '砲': 'c',
+      '卒': 's', '兵': 's',
+      // 英文类名
+      'King': 'k',
+      'Advisor': 'a',
+      'Bishop': 'b',
+      'Horse': 'n',
+      'Rook': 'r',
+      'Cannon': 'c',
+      'Pawn': 's',
+    }
+    
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const piece = this.board[x][y]
+        if (piece) {
+          // 转换为logic.js格式
+          const abbr = nameToAbbr[piece.name] || 'k'
+          // 如果玩家执黑（selfColor === 'black'），前端棋盘是翻转的，需要在发送到 engine 时进行纵向翻转
+          const engineY = this.selfColor === 'black' ? 9 - y : y
+          boardArray[engineY][x] = {
+            t: abbr,
+            c: piece.color,
+          }
+        }
+      }
+    }
+    
+    return boardArray
+  }
+
+  // 直接设置棋盘状态（用于AI走棋后更新棋盘）
+  public setCurrentBoard(boardArray: any): void {
+    // 清空棋盘
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        delete this.board[x][y]
+      }
+    }
+
+    // 根据数组重建棋盘
+    for (let y = 0; y < 10; y++) {
+      for (let x = 0; x < 9; x++) {
+        // 如果玩家执黑，engine 的 row 需要翻回前端坐标
+        const enginePiece = boardArray[y][x]
+        const piece = enginePiece
+        if (piece) {
+          // 将 logic.js 的简称映射为 ChessFactory 可识别的英文类型名
+          const abbrToName: Record<string, string> = {
+            k: 'King',
+            a: 'Advisor',
+            b: 'Bishop',
+            n: 'Horse',
+            r: 'Rook',
+            c: 'Cannon',
+            s: 'Pawn',
+          }
+          const type = abbrToName[(piece.t || '').toLowerCase()] || 'King'
+          const color = piece.c as any
+          const role: any = color === this.selfColor ? 'self' : 'enemy'
+          // 计算前端坐标（如果玩家执黑，需要翻转 engine 的行）
+          const frontendY = this.selfColor === 'black' ? 9 - y : y
+          // 使用 ChessFactory.createChessPiece 创建棋子实例
+          const id = x * 10 + frontendY // 简单生成唯一 id
+          try {
+            const chessPiece = ChessFactory.createChessPiece(this.chesses, id, type as any, color, role, x, this.gridSize)
+            if (chessPiece) {
+              // override default constructor position so piece is placed at intended coordinates
+              chessPiece.position = { x, y: frontendY }
+              this.board[x][frontendY] = chessPiece
+            }
+          } catch (err) {
+            console.error('Failed to create chess piece from boardArray:', piece, err)
+          }
+        }
+      }
+    }
+  }
+
+  // 重新渲染棋盘（用于AI走棋后刷新显示）
+  public render(): void {
+    this.background.clearRect(0, 0, this.width, this.height)
+    this.chesses.clearRect(0, 0, this.width, this.height)
+    
+    // 绘制棋盘
+    this.drawBoard()
+    
+    // 绘制棋子
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const piece = this.board[x][y]
+        if (piece) {
+          piece.draw(this.gridSize)
+        }
+      }
+    }
   }
 
   private listenClick() {
@@ -511,8 +830,9 @@ class ChessBoard {
     }
   }
 
-  public start(color: ChessColor, isNet: boolean) {
+  public start(color: ChessColor, isNet: boolean, isAI: boolean = false) {
     this.isNetPlay = isNet
+    this.isAIPlay = isAI
     this.selfColor = color
     this.currentRole = color === 'red' ? 'self' : 'enemy'
     this.board = Array.from({ length: 9 }).fill(null).map(() => {
@@ -980,6 +1300,20 @@ class ChessBoard {
         targetY + markerSize * 2,
       )
     }
+  }
+
+  /**
+   * 公开方法：通过坐标执行移动（用于 AI）
+   */
+  public makeMoveByPosition(from: ChessPosition, to: ChessPosition) {
+    this.move(from, to)
+  }
+
+  /**
+   * 公开方法：获取棋盘（用于 AI 适配器）
+   */
+  public getBoard(): Board {
+    return this.board
   }
 }
 

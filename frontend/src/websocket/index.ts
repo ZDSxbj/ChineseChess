@@ -20,11 +20,16 @@ const MessageType = {
   ChatMessage: 15, // 聊天消息
   Sync: 16, // 同步房间状态（重连时服务端发送）
   FriendRequest: 17, // 好友申请
+<<<<<<< Updated upstream
   FriendChallengeInvite: 18, // 好友对弈邀请
   FriendChallengeCancel: 19, // 撤销对弈邀请
   FriendChallengeAccept: 20, // 接受对弈邀请
   FriendChallengeReject: 21, // 拒绝对弈邀请
   FriendChallengeCreated: 22, // 邀请已创建（仅发给发送者，含 challengeId、roomId）
+=======
+  AIMove: 23, // AI走棋
+  CreateAI: 24, // 创建AI房间
+>>>>>>> Stashed changes
 } as const
 
 interface WebSocketMessage {
@@ -114,10 +119,24 @@ export function useWebSocket(): WebSocketService {
         }
         break }
       case MessageType.Start:
-      { showMsg('Game started')
-        const { role, opponent } = data as { role: 'red' | 'black', opponent: any }
-        channel.emit('MATCH:SUCCESS', null)
-        channel.emit('NET:GAME:START', { color: role, opponent })
+      { 
+        // 检查是否是AI游戏开始
+        const payload = data as any
+        if (payload.aiColor) {
+          // AI游戏开始
+          showMsg('AI对战开始')
+          channel.emit('AI:GAME:START', { 
+            color: payload.role, 
+            opponent: payload.opponent,
+            aiColor: payload.aiColor,
+          })
+        } else {
+          // 普通游戏开始
+          showMsg('Game started')
+          const { role, opponent } = data as { role: 'red' | 'black', opponent: any }
+          channel.emit('MATCH:SUCCESS', null)
+          channel.emit('NET:GAME:START', { color: role, opponent })
+        }
         break }
       case MessageType.End:
       { const { winner } = data
@@ -220,6 +239,16 @@ export function useWebSocket(): WebSocketService {
         // 格式参考后端: { history: Position[], role: 'red'|'black', currentTurn: 'red'|'black' }
         const payload = data as any
         channel.emit('NET:GAME:SYNC', { history: payload.history || [], role: payload.role, currentTurn: payload.currentTurn })
+        break
+      }
+      case MessageType.AIMove: {
+        // AI走棋消息
+        let { from, to } = data
+        from = translateChessPosition(from!)
+        to = translateChessPosition(to!)
+        if (from && to) {
+          channel.emit('AI:MOVE', { from, to })
+        }
         break
       }
       default:

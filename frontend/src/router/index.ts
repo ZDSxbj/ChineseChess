@@ -89,6 +89,16 @@ const router = createRouter({
           component: () => import('../views/game/ChessView.vue'),
         },
         {
+          path: 'ai-prepare',
+          name: 'game-ai-prepare',
+          component: () => import('../views/game/AIPrepareView.vue'),
+        },
+        {
+          path: 'ai',
+          name: 'game-ai',
+          component: () => import('../views/game/AIView.vue'),
+        },
+        {
           path: 'replay',
           name: 'game-replay',
           component: () => import('../views/game/ReplayView.vue'),

@@ -124,7 +124,8 @@ class King extends ChessPiece {
     role: ChessRole,
     gridSize: number = 50,
   ) {
-    const name = color === 'red' ? '帥' : '將'
+    // 使用简体以与界面记谱保持一致
+    const name = color === 'red' ? '帅' : '将'
     const position = role === 'enemy' ? { x: 4, y: 0 } : { x: 4, y: 9 }
     super(ctx, id, name, color, role, position, gridSize)
   }
@@ -165,7 +166,8 @@ class Advisor extends ChessPiece {
     x: number,
     gridSize: number = 50,
   ) {
-    const name = role === 'enemy' ? '仕' : '士'
+    // 名称按颜色确定，保证黑方显示“士”，红方显示“仕”
+    const name = color === 'red' ? '仕' : '士'
     const y = role === 'enemy' ? 0 : 9
     super(ctx, id, name, color, role, { x, y }, gridSize)
   }

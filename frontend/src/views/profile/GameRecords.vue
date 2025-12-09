@@ -95,19 +95,23 @@ function enterReplay(record: GameRecordItem) {
         // not json -> fallthrough to compact string parsing
       }
 
-      // 紧凑字符串格式，例如 "6665" 表示 (6,6)->(6,5)
+      // 紧凑字符串格式，例如 "6665" 表示 from:(6,6) to:(6,5)，每4个字符表示一步棋
       const s = raw.trim()
-      const positions: any[] = []
-      for (let i = 0; i + 1 < s.length; i += 2) {
-        const cx = Number(s[i])
-        const cy = Number(s[i + 1])
-        if (!Number.isNaN(cx) && !Number.isNaN(cy)) {
-          positions.push({ x: cx, y: cy })
-        }
-      }
       const moves: any[] = []
-      for (let i = 0; i + 1 < positions.length; i += 2) {
-        moves.push({ from: positions[i], to: positions[i + 1], capturedPiece: null, currentRole: 'self' })
+      // 每4个字符为一步：fromX, fromY, toX, toY
+      for (let i = 0; i + 3 < s.length; i += 4) {
+        const fromX = Number(s[i])
+        const fromY = Number(s[i + 1])
+        const toX = Number(s[i + 2])
+        const toY = Number(s[i + 3])
+        if (!Number.isNaN(fromX) && !Number.isNaN(fromY) && !Number.isNaN(toX) && !Number.isNaN(toY)) {
+          moves.push({
+            from: { x: fromX, y: fromY },
+            to: { x: toX, y: toY },
+            capturedPiece: null,
+            currentRole: 'self',
+          })
+        }
       }
       return moves
     }
@@ -150,6 +154,26 @@ async function loadRecords() {
   try {
     const response = await getGameRecords()
     records.value = response.records || []
+    // 处理 AI 前缀：如果是人机对战且对手未知，尝试从 history 前缀读取 AI 难度并替换对手显示
+    records.value.forEach((rec: any) => {
+      if (rec.game_type === 1 && (!rec.opponent_name || rec.opponent_name === '未知玩家')) {
+        const h: string = rec.history || ''
+        const m = h.match(/^AI\|lvl=(\d+)\|/)
+        if (m) {
+          const lvl = Number(m[1]) || 3
+          let label = '中等'
+          if (lvl <= 2) label = '简单'
+          else if (lvl <= 4) label = '中等'
+          else label = '困难'
+          rec.opponent_name = `AI (难度: ${label})`
+          // 去除前缀，保持后续复盘解析兼容
+          rec.history = h.replace(/^AI\|lvl=\d+\|/, '')
+        } else {
+          // fallback: 显示 AI
+          rec.opponent_name = 'AI'
+        }
+      }
+    })
   }
   catch (error: any) {
     console.error('加载对局记录失败:', error)

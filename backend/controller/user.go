@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"chinese-chess-backend/database"
 	"chinese-chess-backend/dto"
 	"chinese-chess-backend/dto/user"
+	recordModel "chinese-chess-backend/model/record"
 	userModel "chinese-chess-backend/model/user"
 	"chinese-chess-backend/service"
 )
@@ -74,6 +76,74 @@ func (uc *UserController) GetGameRecords(c *gin.Context) {
 		return
 	}
 	dto.SuccessResponse(c, dto.WithData(resp))
+}
+
+// SaveGameRecord 接收前端提交的对局记录并持久化（用于人机对战保存）
+func (uc *UserController) SaveGameRecord(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+
+	var req user.SaveGameRecordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("参数错误"))
+		return
+	}
+
+	// 调试日志：记录接收到的保存请求（部分字段）
+	log.Printf("SaveGameRecord called by user %d: is_red=%v result=%d history_len=%d", userID, req.IsRed, req.Result, len(req.History))
+
+	// 构建 GameRecord 数据
+	var redID uint
+	var blackID uint
+	if req.IsRed {
+		redID = uint(userID)
+	} else {
+		blackID = uint(userID)
+	}
+
+	// 将前端提交的 result（0=胜,1=负,2=和，从提交者视角）转换为后端的存储格式（0=红方胜,1=黑方胜,2=和）
+	var storedResult int
+	if req.Result == 2 {
+		storedResult = 2
+	} else if req.IsRed {
+		// 提交者为红方
+		if req.Result == 0 {
+			storedResult = 0
+		} else {
+			storedResult = 1
+		}
+	} else {
+		// 提交者为黑方
+		if req.Result == 0 {
+			storedResult = 1
+		} else {
+			storedResult = 0
+		}
+	}
+
+	startTime := req.StartTime
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+
+	rec := recordModel.GameRecord{
+		RedID:     redID,
+		BlackID:   blackID,
+		StartTime: startTime,
+		Result:    storedResult,
+		History:   req.History,
+		GameType:  1, // 人机对战
+	}
+
+	if err := database.GetMysqlDb().Create(&rec).Error; err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("保存对局记录失败"))
+		return
+	}
+
+	dto.SuccessResponse(c, dto.WithMessage("保存成功"))
 }
 
 func (uc *UserController) SendVCode(c *gin.Context) {

@@ -9,6 +9,7 @@ interface GameEvents {
     winner: color
     online?: boolean
   }
+  'GAME:MOVE': Record<string, never> // AI对战中玩家移动完成事件
   'LOCAL:GAME:END': {
     winner: color
   }
@@ -110,6 +111,19 @@ class Channel {
       }
       this.eventsQueue[eventName]!.push(req)
       return
+    }
+    // 调试：当发生游戏结束相关事件时打印调用栈，便于定位误触发来源
+    if (eventName === 'GAME:END' || eventName === 'LOCAL:GAME:END' || eventName === 'NET:GAME:END') {
+      try {
+        // 尽量少量打印以避免控制台噪音
+        // @ts-ignore
+        console.groupCollapsed && console.groupCollapsed(`[Channel] emit ${String(eventName)}`)
+        console.log('[Channel] emit payload:', req)
+        console.trace('[Channel] emit stack trace')
+        console.groupEnd && console.groupEnd()
+      } catch (e) {
+        console.log('[Channel] emit debug failed', e)
+      }
     }
     // call all listeners
     for (const l of Array.from(set)) {

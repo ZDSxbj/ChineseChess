@@ -171,6 +171,40 @@ function regret() {
   }
 }
 
+// 当前回合与最近一步显示（响应式）
+const currentTurn = ref<string>('—')
+const lastMove = ref<string>('无')
+
+function formatMoveLabel(from: any, to: any, pieceName?: string, pieceColor?: string) {
+  const chineseNums = ['零','一','二','三','四','五','六','七','八','九']
+  const nameMap: Record<string,string> = {
+    'Horse': '马', '馬': '马', '马': '马', '傌': '马', 'n': '马',
+    'Rook': '车', '車': '车', '车': '车', 'r': '车', '俥': '车',
+    'Cannon': '炮', '炮': '炮', 'c': '炮', '砲': '炮',
+    // 象/相 根据棋子颜色显示不同字形
+    'Bishop': pieceColor === 'red' ? '相' : '象', '相': '相', '象': '象', 'b': '相',
+    // 士/仕 由颜色决定，黑方应显示“士”
+    'Advisor': pieceColor === 'red' ? '仕' : '士', '仕': '仕', '士': '士', 'a': '仕',
+    // 王/帅/将 兼容繁简及 engine 产生的字符
+    'King': pieceColor === 'red' ? '帅' : '将', '帥': '帅', '帅': '帅', '將': '将', '将': '将', 'k': '将',
+    // 兵/卒
+    'Pawn': pieceColor === 'red' ? '兵' : '卒', '兵': '兵', '卒': '卒', 's': '兵',
+  }
+  const pieceChar = pieceName ? (nameMap[pieceName] || nameMap[pieceName as any] || '棋') : '棋'
+  const fromFile = pieceColor === 'red' ? 9 - from.x : from.x + 1
+  const toFile = pieceColor === 'red' ? 9 - to.x : to.x + 1
+  let action = ''
+  if (from.x === to.x) {
+    action = '平'
+  } else {
+    const forward = pieceColor === 'red' ? to.y < from.y : to.y > from.y
+    action = forward ? '进' : '退'
+  }
+  const fromLabel = chineseNums[fromFile] || String(fromFile)
+  const toLabel = chineseNums[toFile] || String(toFile)
+  return `${pieceChar}${fromLabel}${action}${toLabel}`
+}
+
 function handlePopState(_event: PopStateEvent) {
   window.history.pushState(null, '', window.location.href)
   showMsg('请通过应用内的导航按钮进行操作')
@@ -224,6 +258,25 @@ onMounted(() => {
   })
   // 清空消息队列
   channel.clearQueue('NET:GAME:END')
+  // 初始化当前回合与最近落子显示
+  try {
+    currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
+    const mh = chessBoard.moveHistoryList || []
+    if (mh.length > 0) {
+      const last = mh[mh.length - 1]
+      lastMove.value = formatMoveLabel(last.from, last.to, last.pieceName, last.pieceColor)
+    }
+  } catch (e) {
+    console.warn('初始化回合/落子显示失败', e)
+  }
+
+  // 订阅棋盘事件更新 UI
+  ;(channel as any).on('BOARD:ROLE:CHANGE', ({ currentRole }: any) => {
+    currentTurn.value = currentRole === 'self' ? '你的回合' : '对手回合'
+  })
+  ;(channel as any).on('BOARD:MOVE:MADE', ({ from, to, pieceName, pieceColor }: any) => {
+    lastMove.value = formatMoveLabel(from, to, pieceName, pieceColor)
+  })
   channel.on('NET:GAME:START', ({ color, opponent }) => {
     console.log('Game started, color:', color)
     // 重置游戏状态
@@ -409,6 +462,8 @@ onUnmounted(() => {
   channel.off('NET:CHESS:REGRET:RESPONSE')
   channel.off('NET:DRAW:REQUEST')
   channel.off('NET:DRAW:RESPONSE')
+  ;(channel as any).off('BOARD:ROLE:CHANGE')
+  ;(channel as any).off('BOARD:MOVE:MADE')
   window.removeEventListener('popstate', handlePopState)
   chessBoard?.stop()
 })
@@ -482,7 +537,7 @@ onUnmounted(() => {
             <span class="text-xs font-bold mt-1" :class="selfColor === 'red' ? 'text-black' : 'text-red-600'">{{ selfColor === 'red' ? '黑方' : '红方' }}</span>
           </div>
         </div>
-        <div class="flex justify-between w-full space-x-2">
+          <div class="flex justify-between w-full space-x-2">
           <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
             <div class="flex justify-between items-center">
               <span class="text-gray-500">经验</span>
@@ -510,6 +565,21 @@ onUnmounted(() => {
               <span class="text-gray-500">胜率</span>
               <span class="font-bold text-gray-700">{{ (opponentInfo?.winRate || 0).toFixed(1) }}%</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 游戏信息（当前回合 / 最近落子） - 仅联机模式显示 -->
+      <div v-if="networkPlay" class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+        <div class="text-sm font-semibold text-blue-900 mb-2">游戏信息</div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="flex justify-between">
+            <span class="text-gray-600">当前回合:</span>
+            <span class="font-bold">{{ currentTurn }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-600">最近落子:</span>
+            <span class="font-bold">{{ lastMove }}</span>
           </div>
         </div>
       </div>

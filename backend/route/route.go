@@ -90,6 +90,7 @@ func SetupRouter() *gin.Engine {
 	hub := websocket.NewChessHub()
 	userRoute.POST("/rooms", hub.GetSpareRooms, room.GetSpareRooms)
 	userRoute.GET("/game-records", user.GetGameRecords)
+	userRoute.POST("/game-records", user.SaveGameRecord)
 	r.GET("/ws", hub.HandleConnection)
 	go hub.Run()
 
