@@ -112,12 +112,40 @@ func (ch *ChessHub) Run() {
 				ch.mu.Unlock()
 				if ok {
 					var target *Client
+					var winner clientRole
 					if room.Current == client {
 						target = room.Next
+						// 当前玩家断开，对方获胜
+						if client.Role == roleRed {
+							winner = roleBlack
+						} else if client.Role == roleBlack {
+							winner = roleRed
+						} else {
+							winner = roleNone
+						}
 					} else {
 						target = room.Current
+						// 非当前玩家断开，当前玩家获胜
+						if target != nil {
+							if target.Role == roleRed {
+								winner = roleRed
+							} else if target.Role == roleBlack {
+								winner = roleBlack
+							} else {
+								winner = roleNone
+							}
+						}
 					}
-					if target != nil {
+
+					// 如果游戏正在进行中，发送游戏结束消息
+					if target != nil && room.Current != nil && room.Next != nil {
+						// 游戏已开始且正在进行
+						ch.sendMessage(target, endMessage{
+							BaseMessage: BaseMessage{Type: messageEnd},
+							Winner:      winner,
+						})
+					} else if target != nil {
+						// 游戏未开始，只告知对方连接断开
 						ch.sendMessage(target, NormalMessage{
 							BaseMessage: BaseMessage{Type: messageNormal},
 							Message:     "对方已断开连接",
@@ -194,6 +222,36 @@ func (ch *ChessHub) Run() {
 						client:      client,
 					}
 				}()
+			case commandCancelMatch:
+				// 【问题2修复】处理取消匹配命令
+				client := cmd.client
+				ch.mu.Lock()
+				// 从匹配池中移除该客户端
+				removed := false
+				for i := len(ch.matchPool) - 1; i >= 0; i-- {
+					if ch.matchPool[i].Id == client.Id {
+						ch.matchPool = append(ch.matchPool[:i], ch.matchPool[i+1:]...)
+						removed = true
+						break
+					}
+				}
+				ch.mu.Unlock()
+
+				// 更新客户端状态为在线
+				client.Status = userOnline
+
+				// 发送取消成功消息
+				if removed {
+					client.sendMessage(NormalMessage{
+						BaseMessage: BaseMessage{Type: messageNormal},
+						Message:     "已成功取消匹配",
+					})
+				} else {
+					client.sendMessage(NormalMessage{
+						BaseMessage: BaseMessage{Type: messageNormal},
+						Message:     "取消匹配失败：您不在匹配队列中",
+					})
+				}
 			case commandMove:
 				req := cmd.payload.(moveRequest)
 				room := ch.Rooms[req.from.RoomId]
@@ -823,6 +881,20 @@ func (ch *ChessHub) handleMessage(client *Client, rawMessage []byte) error {
 			msg := NormalMessage{
 				BaseMessage: BaseMessage{Type: messageNormal},
 				Message:     "您已在游戏中",
+			}
+			ch.sendMessage(client, msg)
+		}
+	case messageCancelMatch:
+		// 【问题2修复】处理取消匹配消息
+		if client.Status == userMatching {
+			ch.commands <- hubCommand{
+				commandType: commandCancelMatch,
+				client:      client,
+			}
+		} else {
+			msg := NormalMessage{
+				BaseMessage: BaseMessage{Type: messageNormal},
+				Message:     "您当前不在匹配状态",
 			}
 			ch.sendMessage(client, msg)
 		}

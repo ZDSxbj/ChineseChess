@@ -12,6 +12,7 @@ const (
 	messageJoin                                  // 加入消息
 	messageCreate                                // 创建房间消息
 	messageGiveUp                                // 放弃消息
+	messageCancelMatch                           // 取消匹配消息
 	messageError                      = 10
 	messageRegretRequest  MessageType = 11 // 悔棋请求
 	messageRegretResponse MessageType = 12 // 悔棋响应

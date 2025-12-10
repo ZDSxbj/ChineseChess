@@ -42,17 +42,12 @@ class ChessPiece {
     if (this.isSelected)
       return
     this.isSelected = true
-    // 闪烁效果
-    let count = 0
-    this.flashingInterval = setInterval(() => {
-      count++
-      count & 1 ? this.clearFromCanvas() : this.draw()
-    }, 250)
+    // 重新绘制以显示高亮边框
+    this.draw()
   }
 
   public deselect() {
     this.isSelected = false
-    // 取消闪烁效果
     clearInterval(this.flashingInterval)
     this.flashingInterval = 0
     this.clearFromCanvas()
@@ -81,6 +76,14 @@ class ChessPiece {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(this.name, x, y)
+
+    if (this.isSelected) {
+      ctx.beginPath()
+      ctx.arc(x, y, this.radius, 0, Math.PI * 2)
+      ctx.strokeStyle = '#fbbf24'
+      ctx.lineWidth = 3
+      ctx.stroke()
+    }
   }
 
   public clearFromCanvas() {

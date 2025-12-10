@@ -12,6 +12,7 @@ const MessageType = {
   Join: 6,
   Create: 7,
   GiveUp: 8,
+  CancelMatch: 9, // 取消匹配
   Error: 10,
   RegretRequest: 11, // 悔棋请求
   RegretResponse: 12, // 悔棋响应
@@ -64,6 +65,7 @@ export interface WebSocketService {
   end: (winner: string) => void
   move: (from: ChessPosition, to: ChessPosition) => void
   match: () => void
+  cancelMatch: () => void // 【问题2修复】新增取消匹配方法
   join: (id: number) => void
   create: () => Promise<unknown>
   giveUp: () => void
@@ -136,7 +138,7 @@ export function useWebSocket(): WebSocketService {
         }
         break }
       case MessageType.End:
-      { const { winner } = data
+      { const { winner, reason } = data as any
         if (winner === undefined) {
           return
         }
@@ -149,7 +151,7 @@ export function useWebSocket(): WebSocketService {
         else if (winner === 2)
           w = 'black'
         if (w) {
-          channel.emit('NET:GAME:END', { winner: w })
+          channel.emit('NET:GAME:END', { winner: w, reason: reason || '' })
         }
         break }
       case MessageType.Error:
@@ -284,6 +286,13 @@ export function useWebSocket(): WebSocketService {
     })
   }
 
+  // 【问题2修复】实现取消匹配方法
+  const cancelMatch = () => {
+    sendMessage({
+      type: MessageType.CancelMatch,
+    })
+  }
+
   const move = (from: ChessPosition, to: ChessPosition) => {
     sendMessage({
       type: MessageType.Move,
@@ -324,7 +333,8 @@ export function useWebSocket(): WebSocketService {
   const giveUp = () => {
     sendMessage({
       type: MessageType.GiveUp,
-    })
+      reason: 'resign',
+    } as any)
   }
 
   // 发送和棋请求
@@ -474,6 +484,7 @@ export function useWebSocket(): WebSocketService {
     close,
     end,
     match,
+    cancelMatch, // 【问题2修复】导出取消匹配方法
     move,
     join,
     create,

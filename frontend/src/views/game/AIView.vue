@@ -6,7 +6,8 @@ import GameEndModal from '@/components/GameEndModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { showMsg } from '@/components/MessageBox'
 import ChessBoard from '@/composables/ChessBoard'
-import { clearGameState } from '@/store/gameStore'
+import { clearGameState, saveGameState } from '@/store/gameStore'
+import type { GameState } from '@/store/gameStore'
 import { useUserStore } from '@/store/useStore'
 import channel from '@/utils/channel'
 import { saveGameRecord } from '@/api/user/getGameRecords'
@@ -27,6 +28,7 @@ let chessBoard: ChessBoard
 const gameOver = ref(false)
 const endModalVisible = ref(false)
 const endResult = ref<'win' | 'lose' | 'draw' | null>(null)
+const resignConfirmVisible = ref(false)
 
 // 从路由参数获取难度和颜色
 const aiLevel = ref(Number(route.query.difficulty) || 3) // AI难度 1-6，默认3
@@ -45,6 +47,10 @@ const quitConfirmVisible = ref(false)
 const moveHistory = ref<string>('')
 const gameStartTime = ref<Date>(new Date())
 let recordSaved = false // 标记是否已保存，防止重复保存
+
+// 【问题1修复】维护有效行棋历史数组（记录每一步的完整信息）
+// 用于准确计算步数，避免悔棋时历史混乱
+const validMoveHistory = ref<Array<{from: any, to: any, pieceName: string, pieceColor: string}>>([])
 
 // 当前回合与最近一步（响应式）
 const currentTurn = ref<string>('—')
@@ -91,9 +97,18 @@ function giveUp() {
     showMsg('游戏已结束')
     return
   }
+  resignConfirmVisible.value = true
+}
+
+function handleResignConfirm() {
+  resignConfirmVisible.value = false
   // 获胜者是对手
   const opponentColor = playerColor.value === 'red' ? 'black' : 'red'
   channel.emit('LOCAL:GAME:END', { winner: opponentColor, reason: 'resign' })
+}
+
+function handleResignCancel() {
+  resignConfirmVisible.value = false
 }
 
 function quit() {
@@ -102,12 +117,16 @@ function quit() {
     quitConfirmVisible.value = true
     return
   }
+  // 【问题2修复】对局结束时清除缓存
+  clearAIGameStateFromSession()
   clearGameState()
   router.push('/')
 }
 
 function handleQuitConfirm() {
   quitConfirmVisible.value = false
+  // 【问题2修复】主动退出时清除缓存
+  clearAIGameStateFromSession()
   clearGameState()
   router.push('/')
 }
@@ -136,6 +155,14 @@ function regret() {
     showMsg('没有可悔棋的步数')
     return
   }
+  
+  // 【问题1修复】悔棋时从有效历史中删除对应步数
+  // 玩家悔棋通常撤销2步（AI的一步 + 玩家的一步），或1步（仅玩家的一步）
+  const stepsToPop = undone
+  for (let i = 0; i < stepsToPop; i++) {
+    validMoveHistory.value.pop()
+  }
+  
   showMsg(`悔了${undone}步棋`) 
 }
 
@@ -145,7 +172,79 @@ function handlePopState(_event: PopStateEvent) {
 }
 
 /**
+ * 【复盘修复】保存游戏状态到 gameStore，供复盘功能使用
+ * 在游戏结束时调用，确保复盘功能可以读取完整的行棋历史（包括最后一步绝杀棋）
+ */
+function saveGameStateForReplay() {
+  try {
+    // 将 validMoveHistory 转换为 gameStore 所需的格式
+    const moveHistoryForReplay = validMoveHistory.value.map(move => ({
+      from: move.from,
+      to: move.to,
+      capturedPiece: null, // AI 对战不需要记录被吃的棋子详情
+      currentRole: 'self' as const, // 对于复盘来说，角色信息不重要
+    }))
+
+    const gameState: GameState = {
+      isNetPlay: false,
+      selfColor: playerColor.value,
+      moveHistory: moveHistoryForReplay,
+      currentRole: 'self',
+    }
+
+    saveGameState(gameState)
+    console.log('游戏状态已保存到 gameStore，用于复盘', { moveCount: validMoveHistory.value.length })
+  } catch (e) {
+    console.warn('保存游戏状态到 gameStore 失败:', e)
+  }
+}
+
+/**
+ * 【问题2修复】保存当前人机对战状态到 sessionStorage
+ * 这样刷新页面时可以恢复对局
+ */
+function saveAIGameStateToSession() {
+  const state = {
+    playerColor: playerColor.value,
+    aiLevel: aiLevel.value,
+    gameStartTime: gameStartTime.value.toISOString(),
+    moveHistory: moveHistory.value,
+    validMoveHistory: validMoveHistory.value,
+    currentTurn: currentTurn.value,
+    lastMove: lastMove.value,
+    gameOver: gameOver.value,
+    // 存储棋盘状态用于恢复
+    boardState: chessBoard ? {
+      stepsNum: chessBoard.stepsNum,
+      currentRole: chessBoard.currentRole,
+      moveHistoryList: chessBoard.moveHistoryList,
+    } : null,
+  }
+  try {
+    sessionStorage.setItem('aiGameState', JSON.stringify(state))
+    console.log('人机对战状态已保存到 sessionStorage')
+  } catch (e) {
+    console.warn('保存人机对战状态失败:', e)
+  }
+}
+
+/**
+ * 【问题2修复】清除 sessionStorage 中的对局状态
+ * 在对局结束或主动退出时调用，避免缓存污染
+ */
+function clearAIGameStateFromSession() {
+  try {
+    sessionStorage.removeItem('aiGameState')
+    console.log('人机对战状态已清除')
+  } catch (e) {
+    console.warn('清除人机对战状态失败:', e)
+  }
+}
+
+/**
  * 保存人机对战记录到后端
+ * 【问题1修复】使用 validMoveHistory 来计算最终有效步数
+ * 悔棋时 validMoveHistory 已正确删除，保证保存的历史是准确的
  */
 async function saveAIGameRecord(winner: 'red' | 'black' | 'draw') {
   if (recordSaved) {
@@ -165,14 +264,20 @@ async function saveAIGameRecord(winner: 'red' | 'black' | 'draw') {
       result = 1 // 负
     }
 
+    // 【问题1修复】根据有效行棋历史重新生成紧凑格式
+    // 这样悔棋的步数不会被包含在最终保存的历史中
+    const finalHistory = validMoveHistory.value
+      .map(move => `${move.from.x}${move.from.y}${move.to.x}${move.to.y}`)
+      .join('')
+
     await saveGameRecord({
       is_red: playerColor.value === 'red',
       result,
-      history: moveHistory.value,
+      history: finalHistory,
       start_time: gameStartTime.value.toISOString(),
       ai_level: aiLevel.value,
     })
-    console.log('人机对战记录已保存')
+    console.log('人机对战记录已保存', { validMoveHistory: validMoveHistory.value, finalHistory })
   } catch (error: any) {
     console.error('保存人机对战记录失败:', error)
     // 不阻塞用户体验，静默失败
@@ -331,6 +436,35 @@ onMounted(() => {
   console.log('AIView mounted, route.query:', route.query)
   console.log('playerColor:', playerColor.value, 'aiLevel:', aiLevel.value)
   
+  // 【问题2修复】尝试从 sessionStorage 恢复之前的对局状态
+  const savedAIGameState = sessionStorage.getItem('aiGameState')
+  let isRestoringState = false
+  
+  if (savedAIGameState) {
+    try {
+      const state = JSON.parse(savedAIGameState)
+      // 检查恢复的状态是否有效（对局未结束）
+      if (!state.gameOver) {
+        console.log('恢复之前的人机对战状态:', state)
+        // 恢复游戏参数
+        playerColor.value = state.playerColor
+        aiLevel.value = state.aiLevel
+        gameStartTime.value = new Date(state.gameStartTime)
+        moveHistory.value = state.moveHistory
+        validMoveHistory.value = state.validMoveHistory || []
+        currentTurn.value = state.currentTurn
+        lastMove.value = state.lastMove
+        isRestoringState = true
+      } else {
+        // 对局已结束，清除缓存
+        sessionStorage.removeItem('aiGameState')
+      }
+    } catch (e) {
+      console.warn('恢复人机对战状态失败:', e)
+      sessionStorage.removeItem('aiGameState')
+    }
+  }
+  
   const gridSize = decideSize(isPC.value)
   const canvasBackground = background.value as HTMLCanvasElement
   const canvasChesses = chesses.value as HTMLCanvasElement
@@ -349,6 +483,16 @@ onMounted(() => {
   chessBoard = new ChessBoard(canvasBackground, canvasChesses, gridSize)
   console.log('Starting ChessBoard with color:', playerColor.value)
   chessBoard.start(playerColor.value, false, true) // 第三个参数true表示AI模式
+  
+  // 【问题2修复】如果恢复了之前的状态，需要恢复棋盘局面
+  if (isRestoringState && validMoveHistory.value.length > 0) {
+    console.log('恢复棋盘局面，共有', validMoveHistory.value.length, '步')
+    // 重放所有有效的历史步数以恢复棋盘状态
+    validMoveHistory.value.forEach(move => {
+      chessBoard.move(move.from, move.to)
+    })
+  }
+  
   console.log('ChessBoard started successfully')
 
   window.history.pushState(null, '', window.location.href)
@@ -372,6 +516,10 @@ onMounted(() => {
       }
       chessBoard?.disableInteraction()
       endModalVisible.value = true
+      // 【复盘修复】保存游戏状态到 gameStore，供复盘功能使用
+      saveGameStateForReplay()
+      // 清理会话缓存
+      clearAIGameStateFromSession()
       // 保存人机对战记录
       saveAIGameRecord(winner)
       return
@@ -396,6 +544,10 @@ onMounted(() => {
         }
         chessBoard?.disableInteraction()
         endModalVisible.value = true
+        // 【复盘修复】保存游戏状态到 gameStore，供复盘功能使用
+        saveGameStateForReplay()
+        // 清理会话缓存
+        clearAIGameStateFromSession()
         // 保存人机对战记录
         saveAIGameRecord(winner)
       } else {
@@ -408,6 +560,10 @@ onMounted(() => {
       endResult.value = winner === playerColor.value ? 'win' : 'lose'
       chessBoard?.disableInteraction()
       endModalVisible.value = true
+      // 【复盘修复】保存游戏状态到 gameStore，供复盘功能使用
+      saveGameStateForReplay()
+      // 清理会话缓存
+      clearAIGameStateFromSession()
       // 保存人机对战记录
       saveAIGameRecord(winner)
     }
@@ -431,8 +587,15 @@ onMounted(() => {
   })
   ;(channel as any).on('BOARD:MOVE:MADE', ({ from, to, pieceName, pieceColor }: any) => {
     lastMove.value = formatMoveLabel(from, to, pieceName, pieceColor)
-    // 维护行棋历史：紧凑格式 "fromX fromY toX toY"
+    // 【问题1修复】维护两份历史：
+    // 1. moveHistory：用于发送给后端的紧凑格式（需在悔棋时正确处理）
+    // 2. validMoveHistory：用于计算最终的有效步数
     moveHistory.value += `${from.x}${from.y}${to.x}${to.y}`
+    validMoveHistory.value.push({ from, to, pieceName, pieceColor })
+    
+    // 【问题2修复】落子后立即保存当前对局状态到 sessionStorage
+    // 这样刷新页面时可以恢复对局
+    saveAIGameStateToSession()
   })
 
 
@@ -454,7 +617,8 @@ onMounted(() => {
     if (playerIsCheckmate) {
       showMsg('AI赢了')
       const aiColor = playerColor.value === 'red' ? 'black' : 'red'
-      channel.emit('GAME:END', { winner: aiColor, online: false })
+      // 修复：触发 LOCAL:GAME:END 而不是 GAME:END，确保游戏正确结束并保存状态
+      channel.emit('LOCAL:GAME:END', { winner: aiColor })
       return
     }
 
@@ -607,6 +771,15 @@ onUnmounted(() => {
     :on-review="() => router.push('/game/replay')"
     :on-quit="quit"
     @close="endModalVisible = false"
+  />
+  <ConfirmModal
+    :visible="resignConfirmVisible"
+    title="确认认输？"
+    message="认输后本局将判负，是否继续？"
+    confirmText="认输"
+    cancelText="取消"
+    :on-confirm="handleResignConfirm"
+    :on-cancel="handleResignCancel"
   />
   <ConfirmModal
     :visible="quitConfirmVisible"

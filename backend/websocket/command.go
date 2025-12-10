@@ -7,6 +7,7 @@ const (
 	commandUnregister                            // 注销
 	commandDisconnect                            // 断线：短时等待重连
 	commandMatch                                 // 匹配
+	commandCancelMatch                           // 取消匹配
 	commandMove                                  // 移动
 	commandSendMessage                           // 发送消息
 	commandStart                                 // 开始游戏
@@ -14,16 +15,16 @@ const (
 	commandJoin                                  // 加入房间
 	commandCreate                                // 创建房间
 	commandHeartbeat                             // 心跳
-	commandRegretRequest  CommendType = 13       // 悔棋请求命令
-	commandRegretResponse CommendType = 14       // 悔棋响应命令
-	commandChatMessage    CommendType = 15       // 聊天消息命令
-	commandDrawRequest    CommendType = 16       // 和棋请求命令
-	commandDrawResponse   CommendType = 17       // 和棋响应命令
+	commandRegretRequest  CommendType = 14       // 悔棋请求命令
+	commandRegretResponse CommendType = 15       // 悔棋响应命令
+	commandChatMessage    CommendType = 16       // 聊天消息命令
+	commandDrawRequest    CommendType = 17       // 和棋请求命令
+	commandDrawResponse   CommendType = 18       // 和棋响应命令
 	// 好友挑战相关命令
-	commandFriendChallengeInvite CommendType = 18
-	commandFriendChallengeCancel CommendType = 19
-	commandFriendChallengeAccept CommendType = 20
-	commandFriendChallengeReject CommendType = 21
+	commandFriendChallengeInvite CommendType = 19
+	commandFriendChallengeCancel CommendType = 20
+	commandFriendChallengeAccept CommendType = 21
+	commandFriendChallengeReject CommendType = 22
 )
 
 type moveRequest struct {

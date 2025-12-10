@@ -2,6 +2,7 @@
 import type { Ref } from 'vue'
 import type { WebSocketService } from '@/websocket'
 import { inject, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useRouter } from 'vue-router'
 import ChatPanel from '@/components/ChatPanel.vue'
 import GameEndModal from '@/components/GameEndModal.vue'
@@ -34,6 +35,9 @@ const drawModalVisible = ref(false)
 const drawModalType = ref<'requesting' | 'responding'>('requesting')
 const endModalVisible = ref(false)
 const endResult = ref<'win' | 'lose' | 'draw' | null>(null)
+const resignConfirmVisible = ref(false)
+const quitConfirmVisible = ref(false)
+const pendingQuitAfterResign = ref(false)
 
 function handleRegretAccept() {
   if (gameOver.value) {
@@ -105,7 +109,18 @@ watch(isPC, (newIsPC) => {
   chessBoard?.redraw(gridSize)
 })
 
-function giveUp() {
+function confirmGiveUp() {
+  if (gameOver.value) {
+    showMsg('游戏已结束')
+    return
+  }
+  if (networkPlay.value) {
+    resignConfirmVisible.value = true
+  }
+}
+
+function handleGiveUpConfirm() {
+  resignConfirmVisible.value = false
   if (gameOver.value) {
     showMsg('游戏已结束')
     return
@@ -114,10 +129,13 @@ function giveUp() {
     ws?.giveUp()
   }
   else {
-    // 本地对局直接触发本地结束事件，胜者为对手
     const opponentColor = chessBoard.SelfColor === 'red' ? 'black' : 'red'
     channel.emit('GAME:END', { winner: opponentColor, online: false })
   }
+}
+
+function handleGiveUpCancel() {
+  resignConfirmVisible.value = false
 }
 
 function offerDraw() {
@@ -139,11 +157,26 @@ function offerDraw() {
 
 function quit() {
   if (!gameOver.value) {
-    giveUp()
+    quitConfirmVisible.value = true
+    return
   }
-  clearGameState() // 退出时清除状态
-  clearModalState() // 退出时清除模态状态，防止下次进入时残留
+  clearGameState()
+  clearModalState()
   router.push('/')
+}
+
+function handleQuitConfirm() {
+  quitConfirmVisible.value = false
+  if (networkPlay.value) {
+    ws?.giveUp()
+  }
+  clearGameState()
+  clearModalState()
+  router.push('/')
+}
+
+function handleQuitCancel() {
+  quitConfirmVisible.value = false
 }
 // 新增悔棋函数
 function regret() {
@@ -303,6 +336,8 @@ onMounted(() => {
     })
     // 清空消息队列
     channel.clearQueue('NET:GAME:END')
+    currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
+    lastMove.value = '无'
   })
 
   // 处理服务端同步消息（重连时）
@@ -338,6 +373,10 @@ onMounted(() => {
       else {
         chessBoard.setCurrentRole('enemy')
       }
+      const isMyTurn = currentTurn === role
+      currentTurn.value = isMyTurn ? '你的回合' : '对手回合'
+    } else {
+      currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
     }
   })
 
@@ -496,7 +535,7 @@ onUnmounted(() => {
           class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
           text="black xl"
           hover="bg-gray-9 text-gray-2"
-          @click="giveUp"
+          @click="confirmGiveUp"
         >
           认输
         </button>
@@ -611,5 +650,23 @@ onUnmounted(() => {
     :on-review="review"
     :on-quit="quit"
     @close="endModalVisible = false"
+  />
+  <ConfirmModal
+    :visible="resignConfirmVisible"
+    :title="networkPlay ? '确认认输？' : '你确定要退出吗'"
+    :message="networkPlay ? '认输后本局将判负，是否继续？' : ''"
+    confirmText="确认"
+    cancelText="取消"
+    :on-confirm="handleGiveUpConfirm"
+    :on-cancel="handleGiveUpCancel"
+  />
+  <ConfirmModal
+    :visible="quitConfirmVisible"
+    :title="networkPlay ? '确认退出？' : '你确定要退出吗'"
+    :message="networkPlay ? '退出将被判负，对局记录将被保存。是否继续？' : ''"
+    confirmText="退出"
+    cancelText="取消"
+    :on-confirm="handleQuitConfirm"
+    :on-cancel="handleQuitCancel"
   />
 </template>

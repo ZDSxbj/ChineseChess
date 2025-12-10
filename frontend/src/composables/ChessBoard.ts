@@ -370,6 +370,11 @@ class ChessBoard {
     // 棋子点击事件
     const piece = this.board[x][y]
     if (this.selectedPiece) {
+      if (piece === this.selectedPiece) {
+        this.selectedPiece.deselect()
+        this.selectedPiece = null
+        return
+      }
       if (!piece || piece.color !== this.selectedPiece.color) {
         const curPiece = this.selectedPiece
         this.move(curPiece.position, { x, y })
@@ -815,6 +820,12 @@ class ChessBoard {
       if (piece.color !== this.selfColor) {
         return
       }
+    }
+
+    if (this.selectedPiece === piece) {
+      this.selectedPiece.deselect()
+      this.selectedPiece = null
+      return
     }
 
     this.selectedPiece?.deselect()
