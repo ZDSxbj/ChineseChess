@@ -29,6 +29,8 @@ type GameRecordItem struct {
 	TotalSteps int       `json:"total_steps"`
 	History    string    `json:"history"`
 	StartTime  time.Time `json:"start_time"`
+	// AI难度: 1-6，仅在 game_type=1 时有效
+	AILevel int `json:"ai_level"`
 }
 
 type GetGameRecordsResponse struct {

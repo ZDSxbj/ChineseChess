@@ -15,6 +15,8 @@ type SaveGameRecordRequest struct {
 	History string `json:"history"`
 	// 对局开始时间，可选
 	StartTime time.Time `json:"start_time"`
+	// AI难度: 1-6，仅在人机对战时有效
+	AILevel int `json:"ai_level"`
 }
 
 func (r *SaveGameRecordRequest) Examine() error {
@@ -23,6 +25,10 @@ func (r *SaveGameRecordRequest) Examine() error {
 	}
 	if r.History == "" {
 		return fmt.Errorf("历史不能为空")
+	}
+	// AI 难度可选，但如果提供了必须在有效范围内
+	if r.AILevel != 0 && (r.AILevel < 1 || r.AILevel > 6) {
+		return fmt.Errorf("无效的AI难度值")
 	}
 	return nil
 }

@@ -154,24 +154,19 @@ async function loadRecords() {
   try {
     const response = await getGameRecords()
     records.value = response.records || []
-    // 处理 AI 前缀：如果是人机对战且对手未知，尝试从 history 前缀读取 AI 难度并替换对手显示
+    // 处理 AI 对手显示：如果是人机对战，使用后端返回的 ai_level 生成友好标签
     records.value.forEach((rec: any) => {
-      if (rec.game_type === 1 && (!rec.opponent_name || rec.opponent_name === '未知玩家')) {
-        const h: string = rec.history || ''
-        const m = h.match(/^AI\|lvl=(\d+)\|/)
-        if (m) {
-          const lvl = Number(m[1]) || 3
-          let label = '中等'
-          if (lvl <= 2) label = '简单'
-          else if (lvl <= 4) label = '中等'
-          else label = '困难'
-          rec.opponent_name = `AI (难度: ${label})`
-          // 去除前缀，保持后续复盘解析兼容
-          rec.history = h.replace(/^AI\|lvl=\d+\|/, '')
+      if (rec.game_type === 1) {
+        const lvl = rec.ai_level || 3
+        let label: string
+        if (lvl <= 2) {
+          label = '简单'
+        } else if (lvl <= 4) {
+          label = '中等'
         } else {
-          // fallback: 显示 AI
-          rec.opponent_name = 'AI'
+          label = '困难'
         }
+        rec.opponent_name = `AI (${label})`
       }
     })
   }

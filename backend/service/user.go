@@ -353,7 +353,19 @@ func (us *UserService) GetGameRecords(req *dto.GetGameRecordsRequest) (*dto.GetG
 		}
 
 		opponentName := opponentMap[opponentID]
-		if opponentName == "" {
+		// 人机对战时，对手 ID 为 0，显示 AI 难度
+		if record.GameType == 1 && opponentID == 0 {
+			var levelLabel string
+			switch {
+			case record.AILevel <= 2:
+				levelLabel = "简单"
+			case record.AILevel <= 4:
+				levelLabel = "中等"
+			default:
+				levelLabel = "困难"
+			}
+			opponentName = "AI (" + levelLabel + ")"
+		} else if opponentName == "" {
 			opponentName = "未知玩家"
 		}
 
@@ -367,6 +379,7 @@ func (us *UserService) GetGameRecords(req *dto.GetGameRecordsRequest) (*dto.GetG
 			TotalSteps:   totalSteps,
 			History:      record.History,
 			StartTime:    record.StartTime,
+			AILevel:      record.AILevel,
 		}
 
 		response.Records = append(response.Records, item)

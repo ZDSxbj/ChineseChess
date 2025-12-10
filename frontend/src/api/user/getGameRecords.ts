@@ -13,6 +13,8 @@ export interface GameRecordItem {
   total_steps: number
   history: string
   start_time: string
+  // ai_level: 1-6，仅在 game_type=1 时有效
+  ai_level: number
 }
 
 export interface GetGameRecordsResponse {
@@ -25,4 +27,21 @@ export interface GetGameRecordsResponse {
  */
 export function getGameRecords() {
   return instance.get<GetGameRecordsResponse>('/user/game-records')
+}
+
+export interface SaveGameRecordRequest {
+  is_red: boolean
+  result: number // 0=胜, 1=负, 2=和
+  history: string
+  start_time: string
+  ai_level: number // 1-6
+}
+
+/**
+ * 保存人机对战记录
+ * @param data SaveGameRecordRequest
+ * @returns Promise
+ */
+export function saveGameRecord(data: SaveGameRecordRequest) {
+  return instance.post('/user/game-records', data)
 }

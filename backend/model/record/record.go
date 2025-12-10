@@ -15,7 +15,9 @@ type GameRecord struct {
 	RedFlag   bool   `gorm:"column:red_flag" json:"red_flag"`
 	BlackFlag bool   `gorm:"column:black_flag" json:"black_flag"`
 	// 对局类型: 0=随机匹配,1=人机,2=好友
-	GameType  int `gorm:"column:game_type" json:"game_type"`
+	GameType int `gorm:"column:game_type" json:"game_type"`
+	// AI难度: 1-6，仅在 game_type=1 时有效
+	AILevel   int `gorm:"column:ai_level;default:3" json:"ai_level"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

@@ -9,6 +9,7 @@ import ChessBoard from '@/composables/ChessBoard'
 import { clearGameState } from '@/store/gameStore'
 import { useUserStore } from '@/store/useStore'
 import channel from '@/utils/channel'
+import { saveGameRecord } from '@/api/user/getGameRecords'
 
 declare const window: any
 
@@ -39,6 +40,11 @@ const aiLabel = computed(() => {
 const playerColor = ref<'red' | 'black'>((route.query.color as 'red' | 'black') || 'red')
 const aiThinking = ref(false) // AI正在思考
 const quitConfirmVisible = ref(false)
+
+// 维护行棋历史（格式：紧凑字符串，如 "6665"）
+const moveHistory = ref<string>('')
+const gameStartTime = ref<Date>(new Date())
+let recordSaved = false // 标记是否已保存，防止重复保存
 
 // 当前回合与最近一步（响应式）
 const currentTurn = ref<string>('—')
@@ -136,6 +142,41 @@ function regret() {
 function handlePopState(_event: PopStateEvent) {
   window.history.pushState(null, '', window.location.href)
   showMsg('请通过应用内的导航按钮进行操作')
+}
+
+/**
+ * 保存人机对战记录到后端
+ */
+async function saveAIGameRecord(winner: 'red' | 'black' | 'draw') {
+  if (recordSaved) {
+    console.log('记录已保存，跳过重复保存')
+    return
+  }
+  recordSaved = true
+
+  try {
+    // 计算当前用户的结果：0=胜, 1=负, 2=和
+    let result: number
+    if (winner === 'draw') {
+      result = 2
+    } else if (winner === playerColor.value) {
+      result = 0 // 胜
+    } else {
+      result = 1 // 负
+    }
+
+    await saveGameRecord({
+      is_red: playerColor.value === 'red',
+      result,
+      history: moveHistory.value,
+      start_time: gameStartTime.value.toISOString(),
+      ai_level: aiLevel.value,
+    })
+    console.log('人机对战记录已保存')
+  } catch (error: any) {
+    console.error('保存人机对战记录失败:', error)
+    // 不阻塞用户体验，静默失败
+  }
 }
 
 /**
@@ -331,6 +372,8 @@ onMounted(() => {
       }
       chessBoard?.disableInteraction()
       endModalVisible.value = true
+      // 保存人机对战记录
+      saveAIGameRecord(winner)
       return
     }
 
@@ -353,6 +396,8 @@ onMounted(() => {
         }
         chessBoard?.disableInteraction()
         endModalVisible.value = true
+        // 保存人机对战记录
+        saveAIGameRecord(winner)
       } else {
         console.warn('Ignored LOCAL:GAME:END because board is not in checkmate for loser', loser, 'payload:', payload)
       }
@@ -363,6 +408,8 @@ onMounted(() => {
       endResult.value = winner === playerColor.value ? 'win' : 'lose'
       chessBoard?.disableInteraction()
       endModalVisible.value = true
+      // 保存人机对战记录
+      saveAIGameRecord(winner)
     }
   })
 
@@ -384,6 +431,8 @@ onMounted(() => {
   })
   ;(channel as any).on('BOARD:MOVE:MADE', ({ from, to, pieceName, pieceColor }: any) => {
     lastMove.value = formatMoveLabel(from, to, pieceName, pieceColor)
+    // 维护行棋历史：紧凑格式 "fromX fromY toX toY"
+    moveHistory.value += `${from.x}${from.y}${to.x}${to.y}`
   })
 
 

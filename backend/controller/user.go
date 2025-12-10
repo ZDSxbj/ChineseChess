@@ -93,15 +93,17 @@ func (uc *UserController) SaveGameRecord(c *gin.Context) {
 	}
 
 	// 调试日志：记录接收到的保存请求（部分字段）
-	log.Printf("SaveGameRecord called by user %d: is_red=%v result=%d history_len=%d", userID, req.IsRed, req.Result, len(req.History))
+	log.Printf("SaveGameRecord called by user %d: is_red=%v result=%d history_len=%d ai_level=%d", userID, req.IsRed, req.Result, len(req.History), req.AILevel)
 
 	// 构建 GameRecord 数据
 	var redID uint
 	var blackID uint
 	if req.IsRed {
 		redID = uint(userID)
+		blackID = 0 // AI 对手，黑方 ID 为 0
 	} else {
 		blackID = uint(userID)
+		redID = 0 // AI 对手，红方 ID 为 0
 	}
 
 	// 将前端提交的 result（0=胜,1=负,2=和，从提交者视角）转换为后端的存储格式（0=红方胜,1=黑方胜,2=和）
@@ -129,6 +131,12 @@ func (uc *UserController) SaveGameRecord(c *gin.Context) {
 		startTime = time.Now()
 	}
 
+	// 默认 AI 难度为 3（如果前端未传）
+	ailevel := req.AILevel
+	if ailevel < 1 || ailevel > 6 {
+		ailevel = 3
+	}
+
 	rec := recordModel.GameRecord{
 		RedID:     redID,
 		BlackID:   blackID,
@@ -136,6 +144,7 @@ func (uc *UserController) SaveGameRecord(c *gin.Context) {
 		Result:    storedResult,
 		History:   req.History,
 		GameType:  1, // 人机对战
+		AILevel:   ailevel,
 	}
 
 	if err := database.GetMysqlDb().Create(&rec).Error; err != nil {
