@@ -498,9 +498,16 @@ class ChessBoard {
       this.end(moverColor)
       return
     } else if (opponentInCheck) {
-<<<<<<< Updated upstream
-      // 对方被将军或我方被将军（取决于当前移动方），播放提示并响铃
-      showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
+      // 对方被将军或我方被将军（取决于当前移动方）
+      if (this.isAIPlay) {
+        if (opponentColor === this.selfColor) {
+          showMsg('你被将军了！')
+        } else {
+          showMsg('AI被将军！')
+        }
+      } else {
+        showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
+      }
       try {
         if (this.checkAudio) {
           this.checkAudio.currentTime = 0
@@ -508,7 +515,7 @@ class ChessBoard {
         }
       } catch {}
     } else {
-      // 非将军的情况下，如果发生了吃子，则播放吃子音效（仅联机时启用）
+      // 非将军的情况下：若发生吃子则播放吃子音效（仅联机时启用），否则不做将军提示
       if (this.isNetPlay && !!targetPiece) {
         try {
           if (this.eatAudio) {
@@ -517,18 +524,7 @@ class ChessBoard {
           }
         } catch {}
       }
-=======
-      // 对方被将军，显示提示
-        if (this.isAIPlay) {
-          if (opponentColor === this.selfColor) {
-            showMsg('你被将军了！')
-          } else {
-            showMsg('AI被将军！')
-          }
-        } else {
-          showMsg(`${opponentColor === 'red' ? '红方' : '黑方'}被将军！`)
-        }
->>>>>>> Stashed changes
+      // 非将军，不显示将军提示
     }
 
     // 如果直接吃掉对方的将，立即判定结束（移动方胜）

@@ -20,16 +20,13 @@ const MessageType = {
   ChatMessage: 15, // 聊天消息
   Sync: 16, // 同步房间状态（重连时服务端发送）
   FriendRequest: 17, // 好友申请
-<<<<<<< Updated upstream
   FriendChallengeInvite: 18, // 好友对弈邀请
   FriendChallengeCancel: 19, // 撤销对弈邀请
   FriendChallengeAccept: 20, // 接受对弈邀请
   FriendChallengeReject: 21, // 拒绝对弈邀请
   FriendChallengeCreated: 22, // 邀请已创建（仅发给发送者，含 challengeId、roomId）
-=======
   AIMove: 23, // AI走棋
   CreateAI: 24, // 创建AI房间
->>>>>>> Stashed changes
 } as const
 
 interface WebSocketMessage {
