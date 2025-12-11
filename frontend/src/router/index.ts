@@ -102,14 +102,16 @@ const router = createRouter({
 // 路由守卫：校验需要登录的路由
 router.beforeEach((to, from, next) => {
   const requiresAuth = to.meta.requiresAuth
-  // 根据实际项目调整登录判断（如Pinia状态、localStorage token）
-  const isLoggedIn = localStorage.getItem('token') || false
+  // 登录判断：优先用 rememberMe 选择存储源，其次允许使用 Pinia 状态
+  const rememberFlag = localStorage.getItem('rememberMe')
+  const storage = (rememberFlag === '1') ? localStorage : sessionStorage
+  const token = storage.getItem('token') || localStorage.getItem('token') || sessionStorage.getItem('token')
+  const isLoggedIn = !!token
 
   if (requiresAuth && !isLoggedIn) {
-    next('/auth/login') // 未登录则跳登录页
-  }
-  else {
-    next() // 已登录或无需登录，正常跳转
+    next('/auth/login')
+  } else {
+    next()
   }
 })
 

@@ -29,8 +29,11 @@ function handleResize() {
   isPC.value = window.innerWidth > 640
 }
 
-const email = localStorage.getItem('email')
-const password = localStorage.getItem('password')
+// 根据 rememberMe，从对应存储读取自动登录凭据
+const rememberFlag = localStorage.getItem('rememberMe')
+const storage = (rememberFlag === '1') ? localStorage : sessionStorage
+const email = storage.getItem('email')
+const password = storage.getItem('password')
 if (email && password) {
   login({ email, password }).then((resp) => {
     apiBus.emit('API:LOGIN', { ...resp, stop: true })

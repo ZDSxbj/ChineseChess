@@ -37,11 +37,19 @@ async function loginAction() {
   try {
     const resp = await login({ email, password })
 
-    apiBus.emit('API:LOGIN', resp)
+    // 携带 remember 标记，供 store 决定使用 localStorage 或 sessionStorage
+    apiBus.emit('API:LOGIN', { ...resp, remember: !!rememberMe.value?.checked })
 
     if (rememberMe.value?.checked) {
       localStorage.setItem('email', email)
       localStorage.setItem('password', password)
+      try { sessionStorage.removeItem('email') } catch {}
+      try { sessionStorage.removeItem('password') } catch {}
+    } else {
+      sessionStorage.setItem('email', email)
+      sessionStorage.setItem('password', password)
+      try { localStorage.removeItem('email') } catch {}
+      try { localStorage.removeItem('password') } catch {}
     }
   }
   catch (error) {

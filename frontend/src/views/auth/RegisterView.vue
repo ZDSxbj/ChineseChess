@@ -94,9 +94,16 @@ async function registerAction() {
     if (rememberMe.value?.checked) {
       localStorage.setItem('email', email)
       localStorage.setItem('password', password)
+      try { sessionStorage.removeItem('email') } catch {}
+      try { sessionStorage.removeItem('password') } catch {}
+    } else {
+      sessionStorage.setItem('email', email)
+      sessionStorage.setItem('password', password)
+      try { localStorage.removeItem('email') } catch {}
+      try { localStorage.removeItem('password') } catch {}
     }
     console.log('register')
-    apiBus.emit('API:LOGIN', resp)
+    apiBus.emit('API:LOGIN', { ...resp, remember: !!rememberMe.value?.checked })
   }
   catch (error) {
     console.error('Register failed:', error)
