@@ -543,7 +543,7 @@ onMounted(() => {
     } catch (e) {}
   })
 
-  
+
   // 好友对弈邀请
   channel.on('NET:FRIEND:CHALLENGE:INVITE', (payload: any) => {
     try {
@@ -703,9 +703,9 @@ onBeforeUnmount(() => {
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
                       <h3 class="text-base font-semibold text-gray-800 truncate">{{ searchResult.name }}</h3>
-                      <div v-if="searchResult.gender === '男'" class="i-carbon-gender-male text-blue-500 text-lg" title="男"></div>
-                      <div v-else-if="searchResult.gender === '女'" class="i-carbon-gender-female text-pink-500 text-lg" title="女"></div>
-                      <div v-else-if="searchResult.gender === '其他'" class="i-carbon-help text-gray-400 text-lg" title="其他"></div>
+                      <span v-if="searchResult.gender === '男'" class="text-blue-500 text-lg" title="男">♂</span>
+                      <span v-else-if="searchResult.gender === '女'" class="text-pink-500 text-lg" title="女">♀</span>
+                      <span v-else-if="searchResult.gender === '其他'" class="text-gray-400 text-lg" title="其他">？</span>
                     </div>
                     <!-- Add Button -->
                     <button :disabled="(searchResult as any).pending" @click="tryAddFriend" class="px-3 py-1 text-xs text-white bg-blue-500 rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :title="(searchResult as any).pending ? '请等待对方响应' : ''" aria-haspopup="dialog">

@@ -60,10 +60,10 @@ function handleImageError(e: Event) {
           <h3 class="text-base font-semibold text-gray-800 truncate">{{ friend.name }}</h3>
           <span v-if="friend.unreadCount && friend.unreadCount > 0" class="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-semibold rounded-full px-2 py-0.5">{{ friend.unreadCount > 99 ? '99+' : friend.unreadCount }}</span>
           <span v-if="friend.challengePending" class="ml-2 inline-flex items-center justify-center bg-yellow-400 text-gray-900 text-xs font-semibold rounded-full px-2 py-0.5">挑战</span>
-          <!-- 性别图标 -->
-          <div v-if="friend.gender === '男'" class="i-carbon-gender-male text-blue-500 text-lg" title="男"></div>
-          <div v-else-if="friend.gender === '女'" class="i-carbon-gender-female text-pink-500 text-lg" title="女"></div>
-          <div v-else-if="friend.gender === '其他'" class="i-carbon-help text-gray-400 text-lg" title="其他"></div>
+          <!-- 性别标识：使用字符避免图标依赖 -->
+          <span v-if="friend.gender === '男'" class="text-blue-500 text-lg" title="男">♂</span>
+          <span v-else-if="friend.gender === '女'" class="text-pink-500 text-lg" title="女">♀</span>
+          <span v-else-if="friend.gender === '其他'" class="text-gray-400 text-lg" title="其他">？</span>
         </div>
         <span v-if="friend.online" class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-sm" title="在线"></span>
         <span v-else class="w-2.5 h-2.5 bg-gray-300 rounded-full" title="离线"></span>
