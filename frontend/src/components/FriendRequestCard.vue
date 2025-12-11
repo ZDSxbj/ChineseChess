@@ -60,7 +60,7 @@ function handleImageError(e: Event) {
 
       <div class="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
         <span>场次: {{ props.request.totalGames || 0 }}</span>
-        <span>胜率: {{ ((props.request.winRate || 0) * 100).toFixed(1) }}%</span>
+        <span>胜率: {{ (props.request.winRate || 0).toFixed(2) }}%</span>
       </div>
       <div class="text-xs text-gray-400 mt-0.5">经验: {{ props.request.exp || 0 }}</div>
 

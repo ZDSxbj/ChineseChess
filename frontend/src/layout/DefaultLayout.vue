@@ -27,12 +27,7 @@ onMounted(() => {
           <router-link to="/" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             首页
           </router-link>
-          <router-link to="/about" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
-            关于
-          </router-link>
-          <router-link to="/room" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
-            大厅
-          </router-link>
+          
           <router-link to="/social" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             <span class="inline-flex items-center gap-2">
               <span>社交</span>
@@ -70,12 +65,7 @@ onMounted(() => {
           <router-link to="/" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             首页
           </router-link>
-          <router-link to="/about" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
-            关于
-          </router-link>
-          <router-link to="/room" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
-            大厅
-          </router-link>
+          
 
           <router-link to="/social" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
             <span class="inline-flex items-center gap-2">

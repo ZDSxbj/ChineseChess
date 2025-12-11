@@ -152,6 +152,42 @@ func (uc *UserController) SaveGameRecord(c *gin.Context) {
 		return
 	}
 
+	// 经验值结算（人机对战）：
+	// 简单(<=2)：赢+5 输+1；中等(3-4)：赢+20 输+5；困难(>=5)：赢+30 输+10
+	// req.Result 为提交者视角：0=胜，1=负，2=和（AI无和棋，这里忽略2）
+	var expDelta int
+	if req.Result == 0 || req.Result == 1 {
+		if ailevel <= 2 {
+			if req.Result == 0 {
+				expDelta = 5
+			} else {
+				expDelta = 1
+			}
+		} else if ailevel <= 4 {
+			if req.Result == 0 {
+				expDelta = 20
+			} else {
+				expDelta = 5
+			}
+		} else {
+			if req.Result == 0 {
+				expDelta = 30
+			} else {
+				expDelta = 10
+			}
+		}
+		if err := uc.userService.AddUserExp(userID, expDelta); err != nil {
+			log.Printf("add exp failed (AI): %v", err)
+		}
+	}
+
+	// 保存成功后，按规则更新用户统计：
+	// 人机对战只有一侧是用户（另一侧为0），这里仅更新当前用户统计；
+	// UpdateUserStats 会按规则（AI仅胜负计数、随机匹配全计数）重新聚合。
+	if err := uc.userService.UpdateUserStats(userID); err != nil {
+		log.Printf("UpdateUserStats failed after AI record save: %v", err)
+	}
+
 	dto.SuccessResponse(c, dto.WithMessage("保存成功"))
 }
 

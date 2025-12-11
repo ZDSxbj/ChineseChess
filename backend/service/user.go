@@ -21,6 +21,100 @@ func NewUserService() *UserService {
 	return &UserService{}
 }
 
+// AddUserExp 为指定用户增加经验值（可为负，但最小不低于0）
+func (us *UserService) AddUserExp(userID int, delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	db := database.GetMysqlDb()
+	var u userModel.User
+	if err := db.Where("id = ?", userID).First(&u).Error; err != nil {
+		return err
+	}
+	newExp := u.Exp + delta
+	if newExp < 0 {
+		newExp = 0
+	}
+	u.Exp = newExp
+	return db.Save(&u).Error
+}
+
+// UpdateUserStats 重新计算并更新用户的总场次与胜率
+// 统计规则：
+// - 本地对战不入库，天然不计入
+// - 人机对战（game_type=1）：仅当分出胜负（result=0或1）才计入场次；和棋不计入场次
+// - 随机匹配（game_type=0）：一局结束即计入场次（含和棋）
+// - 胜率基于胜/负计算：wins / (wins + losses) * 100，和棋不影响分母
+func (us *UserService) UpdateUserStats(userID int) error {
+	db := database.GetMysqlDb()
+
+	var wins int64
+	var losses int64
+	var randomFriendAll int64
+	var randomFriendDraws int64
+	var aiWinLoss int64
+
+	// 胜场：用户为红且result=0，或用户为黑且result=1；统计随机匹配、好友、人机
+	if err := db.Model(&recordModel.GameRecord{}).
+		Where("game_type IN ?", []int{0, 1, 2}).
+		Where("(red_id = ? AND result = 0) OR (black_id = ? AND result = 1)", userID, userID).
+		Count(&wins).Error; err != nil {
+		return err
+	}
+
+	// 负场：用户为红且result=1，或用户为黑且result=0；统计随机匹配、好友、人机
+	if err := db.Model(&recordModel.GameRecord{}).
+		Where("game_type IN ?", []int{0, 1, 2}).
+		Where("(red_id = ? AND result = 1) OR (black_id = ? AND result = 0)", userID, userID).
+		Count(&losses).Error; err != nil {
+		return err
+	}
+
+	// 随机匹配 + 好友对战总局数：包含和棋
+	if err := db.Model(&recordModel.GameRecord{}).
+		Where("game_type IN ?", []int{0, 2}).
+		Where("red_id = ? OR black_id = ?", userID, userID).
+		Count(&randomFriendAll).Error; err != nil {
+		return err
+	}
+
+	// 随机匹配 + 好友对战的和棋数
+	if err := db.Model(&recordModel.GameRecord{}).
+		Where("game_type IN ?", []int{0, 2}).
+		Where("red_id = ? OR black_id = ?", userID, userID).
+		Where("result = 2").
+		Count(&randomFriendDraws).Error; err != nil {
+		return err
+	}
+
+	// 人机计入的局数：仅胜/负（result != 2）
+	if err := db.Model(&recordModel.GameRecord{}).
+		Where("game_type = 1").
+		Where("(red_id = ? OR black_id = ?)", userID, userID).
+		Where("result IN (0,1)").
+		Count(&aiWinLoss).Error; err != nil {
+		return err
+	}
+
+	// 总场次：随机匹配+好友 全部；人机仅胜负
+	totalGames := int(randomFriendAll + aiWinLoss)
+	// 胜率分母：随机匹配+好友（胜+负+和），人机（胜+负）——与总场次等价
+	denom := float64(wins + losses + randomFriendDraws)
+	winRate := 0.0
+	if denom > 0 {
+		winRate = float64(wins) * 100.0 / denom
+	}
+
+	// 更新用户数据
+	var u userModel.User
+	if err := db.Where("id = ?", userID).First(&u).Error; err != nil {
+		return err
+	}
+	u.TotalGames = totalGames
+	u.WinRate = winRate
+	return db.Save(&u).Error
+}
+
 func (us *UserService) Register(req *dto.RegisterRequest) (dto.RegisterResponse, error) {
 	var registerResp dto.RegisterResponse
 	var err error

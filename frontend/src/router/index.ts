@@ -15,16 +15,7 @@ const router = createRouter({
           name: 'home',
           component: () => import('../views/default/HomeView.vue'),
         },
-        {
-          path: 'about',
-          name: 'about',
-          component: () => import('../views/default/AboutView.vue'),
-        },
-        {
-          path: 'room',
-          name: 'room',
-          component: () => import('../views/default/RoomView.vue'),
-        },
+        // 已移除 关于 与 大厅 路由
         {
           path: 'social',
           name: 'social',
