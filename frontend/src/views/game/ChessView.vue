@@ -12,6 +12,7 @@ import ChessBoard from '@/composables/ChessBoard'
 import { clearGameState, getGameState, saveGameState, saveModalState, getModalState, clearModalState } from '@/store/gameStore'
 import { useUserStore } from '@/store/useStore'
 import channel from '@/utils/channel'
+import { getProfile } from '@/api/user/getProfile'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -338,6 +339,14 @@ onMounted(() => {
     channel.clearQueue('NET:GAME:END')
     currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
     lastMove.value = '无'
+
+    // 刚进入对局，主动刷新资料以更新右上角场次/胜率
+    try {
+      getProfile().then((resp: any) => {
+        const d = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+        if (d) userStore.setUser(d)
+      }).catch(() => {})
+    } catch {}
   })
 
   // 处理服务端同步消息（重连时）
@@ -444,6 +453,14 @@ onMounted(() => {
     endModalVisible.value = true
     // 持久化结束模态，刷新后仍显示
     saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
+
+    // 同步刷新用户资料以更新总场次与胜率
+    try {
+      getProfile().then((resp: any) => {
+        const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+        if (data) userStore.setUser(data)
+      }).catch(() => {})
+    } catch {}
   })
 
   channel.on('LOCAL:GAME:END', ({ winner }: any) => {
@@ -588,7 +605,7 @@ onUnmounted(() => {
             </div>
             <div class="flex justify-between items-center">
               <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(1) }}%</span>
+              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(2) }}%</span>
             </div>
           </div>
           <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
@@ -602,7 +619,7 @@ onUnmounted(() => {
             </div>
             <div class="flex justify-between items-center">
               <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (opponentInfo?.winRate || 0).toFixed(1) }}%</span>
+              <span class="font-bold text-gray-700">{{ (opponentInfo?.winRate || 0).toFixed(2) }}%</span>
             </div>
           </div>
         </div>

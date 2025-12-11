@@ -3,6 +3,7 @@ package websocket
 import (
 	"chinese-chess-backend/database"
 	recordModel "chinese-chess-backend/model/record"
+	"chinese-chess-backend/service"
 	"fmt"
 	"log"
 	"strconv"
@@ -196,5 +197,46 @@ func saveGameRecord(room *ChessRoom, winner clientRole) {
 
 	if err := database.GetMysqlDb().Create(&rec).Error; err != nil {
 		log.Printf("failed to save game record: %v", err)
+	} else {
+		// 记录成功后，更新双方（如果存在）的统计
+		// 仅针对玩家ID>0（AI 为0不更新）
+		us := service.NewUserService()
+		// 经验值结算（随机匹配与好友对战一致）：
+		// 赢 +20，和 +10，输 +5
+		if room.GameType == 0 || room.GameType == 2 {
+			// 确定胜负/和
+			if result == 2 {
+				if redID > 0 {
+					_ = us.AddUserExp(int(redID), 10)
+				}
+				if blackID > 0 {
+					_ = us.AddUserExp(int(blackID), 10)
+				}
+			} else if result == 0 { // 红胜
+				if redID > 0 {
+					_ = us.AddUserExp(int(redID), 20)
+				}
+				if blackID > 0 {
+					_ = us.AddUserExp(int(blackID), 5)
+				}
+			} else if result == 1 { // 黑胜
+				if blackID > 0 {
+					_ = us.AddUserExp(int(blackID), 20)
+				}
+				if redID > 0 {
+					_ = us.AddUserExp(int(redID), 5)
+				}
+			}
+		}
+		if redID > 0 {
+			if err := us.UpdateUserStats(int(redID)); err != nil {
+				log.Printf("update user(%d) stats failed: %v", redID, err)
+			}
+		}
+		if blackID > 0 && blackID != redID { // 避免重复
+			if err := us.UpdateUserStats(int(blackID)); err != nil {
+				log.Printf("update user(%d) stats failed: %v", blackID, err)
+			}
+		}
 	}
 }

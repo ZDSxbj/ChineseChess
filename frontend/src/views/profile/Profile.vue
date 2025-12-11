@@ -126,7 +126,7 @@
       <div class="form-group">
         <label class="form-label">胜率</label>
         <div class="field-row">
-          <div class="field-value">{{ formData.winRate }}%</div>
+          <div class="field-value">{{ (formData.winRate || 0).toFixed(2) }}%</div>
         </div>
       </div>
 
@@ -641,6 +641,13 @@ const logout = async () => {
     // 额外确保本地存储的 token/userInfo 被清理（以防 store 未实现）
     try { localStorage.removeItem('token'); } catch {}
     try { localStorage.removeItem('userInfo'); } catch {}
+    // 同步清理本地保存的登录凭据（Local Storage）
+    // 这些字段通常在登录页用于“记住我”功能
+    try { localStorage.removeItem('email'); } catch {}
+    try { localStorage.removeItem('password'); } catch {}
+    // 兼容性：若有存入 Session Storage，也一并清理
+    try { sessionStorage.removeItem('email'); } catch {}
+    try { sessionStorage.removeItem('password'); } catch {}
 
     // 使用 replace 防止用户按后退回到已登录页面
     await router.replace('/auth/login');

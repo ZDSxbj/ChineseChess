@@ -11,6 +11,7 @@ import type { GameState } from '@/store/gameStore'
 import { useUserStore } from '@/store/useStore'
 import channel from '@/utils/channel'
 import { saveGameRecord } from '@/api/user/getGameRecords'
+import { getProfile } from '@/api/user/getProfile'
 
 declare const window: any
 
@@ -284,6 +285,15 @@ async function saveAIGameRecord(winner: 'red' | 'black' | 'draw') {
   }
 }
 
+function refreshUserProfile() {
+  try {
+    getProfile().then((resp: any) => {
+      const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+      if (data) userStore.setUser(data)
+    }).catch(() => {})
+  } catch {}
+}
+
 /**
  * 使用logic.js中的AI算法进行走棋
  */
@@ -435,6 +445,13 @@ function requestAIMove() {
 onMounted(() => {
   console.log('AIView mounted, route.query:', route.query)
   console.log('playerColor:', playerColor.value, 'aiLevel:', aiLevel.value)
+  // 进入人机对局时，主动刷新资料以更新右上角场次/胜率
+  try {
+    getProfile().then((resp: any) => {
+      const d = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+      if (d) userStore.setUser(d)
+    }).catch(() => {})
+  } catch {}
   
   // 【问题2修复】尝试从 sessionStorage 恢复之前的对局状态
   const savedAIGameState = sessionStorage.getItem('aiGameState')
@@ -520,8 +537,9 @@ onMounted(() => {
       saveGameStateForReplay()
       // 清理会话缓存
       clearAIGameStateFromSession()
-      // 保存人机对战记录
+      // 保存人机对战记录并刷新资料
       saveAIGameRecord(winner)
+      refreshUserProfile()
       return
     }
 
@@ -548,8 +566,9 @@ onMounted(() => {
         saveGameStateForReplay()
         // 清理会话缓存
         clearAIGameStateFromSession()
-        // 保存人机对战记录
+        // 保存人机对战记录并刷新资料
         saveAIGameRecord(winner)
+        refreshUserProfile()
       } else {
         console.warn('Ignored LOCAL:GAME:END because board is not in checkmate for loser', loser, 'payload:', payload)
       }
@@ -564,8 +583,9 @@ onMounted(() => {
       saveGameStateForReplay()
       // 清理会话缓存
       clearAIGameStateFromSession()
-      // 保存人机对战记录
+      // 保存人机对战记录并刷新资料
       saveAIGameRecord(winner)
+      refreshUserProfile()
     }
   })
 
@@ -724,7 +744,7 @@ onUnmounted(() => {
             </div>
             <div class="flex justify-between items-center">
               <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(1) }}%</span>
+              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(2) }}%</span>
             </div>
           </div>
           <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
