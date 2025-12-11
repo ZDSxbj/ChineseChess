@@ -481,7 +481,26 @@ onMounted(() => {
   // 刷新恢复模态状态
   const restored = restoreChallengeModals()
   if (restored.waiting) waitingModal.value = restored.waiting
-  if (restored.response) responseModal.value = restored.response
+  // 为了保持一致性：重新进入社交界面时不直接弹出响应窗口，
+  // 而是仅在点击对应好友卡片后再弹出。
+  // 因此当恢复到一个可见的响应模态时，将其转换为好友列表上的“挑战”标签。
+  if (restored.response) {
+    const r = restored.response
+    // 始终关闭恢复的弹窗可见性
+    responseModal.value = { visible: false }
+    // 如果能拿到 senderId，则标记该好友有挂起挑战
+    if (typeof r.senderId === 'number' && r.senderId > 0) {
+      incomingChallengeMap.value.set(r.senderId, {
+        challengeId: r.challengeId || 0,
+        roomId: r.roomId || 0,
+        senderName: r.senderName,
+      })
+      const f = friends.value.find(fr => fr.id === r.senderId)
+      if (f) {
+        ;(f as any).challengePending = true
+      }
+    }
+  }
   load()
   // 轮询作为后备方案，建议服务端通过 WebSocket 推送在线状态更新以减少轮询
   pollTimer = window.setInterval(() => {
@@ -524,6 +543,7 @@ onMounted(() => {
     } catch (e) {}
   })
 
+  
   // 好友对弈邀请
   channel.on('NET:FRIEND:CHALLENGE:INVITE', (payload: any) => {
     try {

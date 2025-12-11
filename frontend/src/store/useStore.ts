@@ -10,11 +10,12 @@ export const useUserStore = defineStore('user', () => {
   const userInfo = ref<UserInfo>()
 
   const token = computed(() => {
-    if (t.value) {
-      return t.value
-    }
-    else if (localStorage.getItem('token')) {
-      t.value = localStorage.getItem('token') as string
+    if (t.value) return t.value
+    // 根据 rememberMe 选择存储源：localStorage(记住我) 或 sessionStorage(不记住)
+    const storage = (localStorage.getItem('rememberMe') === '1') ? localStorage : sessionStorage
+    const persisted = storage.getItem('token')
+    if (persisted) {
+      t.value = persisted as string
       return t.value
     }
     apiBus.emit('API:UN_AUTH', null)
@@ -24,12 +25,16 @@ export const useUserStore = defineStore('user', () => {
   const logout = () => {
     t.value = ''
     userInfo.value = undefined
+    // 清理两种存储的 token
+    try { localStorage.removeItem('token') } catch {}
+    try { sessionStorage.removeItem('token') } catch {}
   }
 
   const setToken = (newToken: string) => {
     const tokenValue = unref(newToken)
     t.value = tokenValue
-    localStorage.setItem('token', tokenValue)
+    const storage = (localStorage.getItem('rememberMe') === '1') ? localStorage : sessionStorage
+    storage.setItem('token', tokenValue)
   }
 
   const setUser = (user: UserInfo) => {
@@ -38,7 +43,11 @@ export const useUserStore = defineStore('user', () => {
   }
 
   apiBus.on('API:LOGIN', (req) => {
-    const { token: newToken, name, avatar, exp } = req
+    const { token: newToken, name, avatar, exp, remember } = req as any
+    // 更新 rememberMe 标记：选中为 '1'，未选中为 '0'；未提供则保持不变
+    if (typeof remember !== 'undefined') {
+      try { localStorage.setItem('rememberMe', remember ? '1' : '0') } catch {}
+    }
     setToken(newToken)
     // 尝试获取完整的用户资料（包含 id），以便前端用于消息发送者比对
     getProfile().then((resp) => {
@@ -60,6 +69,7 @@ export const useUserStore = defineStore('user', () => {
 
   apiBus.on('API:LOGOUT', () => {
     logout()
+    // 登出不强制修改 rememberMe 标记，让用户偏好保留
   })
 
   // 暴露必要的操作方法，便于在页面中调用（例如 Profile.vue 中更新头像等）
