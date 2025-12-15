@@ -35,6 +35,10 @@ onMounted(() => {
             </span>
           </router-link>
 
+          <router-link to="/endgame" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
+            残局挑战
+          </router-link>
+
           <!-- 修改点 1: 将 <a> 标签改为 <router-link> -->
           <router-link
             v-if="userInfo?.name"
@@ -72,6 +76,10 @@ onMounted(() => {
               <span>社交</span>
               <span v-if="totalUnread && totalUnread > 0" class="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-semibold rounded-full px-2 py-0.5">{{ totalUnread > 99 ? '99+' : totalUnread }}</span>
             </span>
+          </router-link>
+
+          <router-link to="/endgame" class="rounded-lg bg-[#e0e0e0] p-4 text-xl" hover="bg-[#b1aeae]">
+            残局挑战
           </router-link>
 
           <!-- 修改点 2: 同样，将移动端的 <a> 标签改为 <router-link> -->

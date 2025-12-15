@@ -13,6 +13,25 @@ const chesses = ref<HTMLCanvasElement | null>(null)
 let chessBoard: ChessBoard | undefined
 const hist = ref<any[]>([])
 const index = ref(0)
+const playerColor = ref<'red' | 'black'>('red')
+
+// 获取当前步骤的描述
+const currentStepInfo = () => {
+  if (index.value === 0 || index.value > hist.value.length) return ''
+  const step = hist.value[index.value - 1]
+  if (!step) return ''
+  
+  // 如果有颜色信息，使用它；否则根据奇偶步推断（红先黑后）
+  let moveColor: string
+  if (step.pieceColor) {
+    moveColor = step.pieceColor === 'red' ? '红方' : '黑方'
+  } else {
+    // 旧格式：奇数步红方，偶数步黑方
+    moveColor = (index.value % 2 === 1) ? '红方' : '黑方'
+  }
+  
+  return `${moveColor} 从 (${step.from.x},${step.from.y}) 到 (${step.to.x},${step.to.y})`
+}
 
 function applySteps(n: number) {
   if (!chessBoard) {
@@ -85,6 +104,7 @@ onMounted(() => {
 
   chessBoard = new ChessBoard(canvasBg, canvasCh, 70)
   chessBoard.start(saved.selfColor, false)
+  playerColor.value = saved.selfColor
   hist.value = saved.moveHistory || []
   index.value = hist.value.length // 默认到最后一步
   applySteps(index.value)
@@ -114,5 +134,6 @@ onUnmounted(() => {
       <button :disabled="index >= hist.length" class="rounded bg-green-600 px-4 py-2 text-white disabled:opacity-40" @click="onNext">下一步</button>
     </div>
     <div class="mt-2 text-sm text-gray-700">第 {{ index }} 步 / 共 {{ hist.length }} 步</div>
+    <div v-if="index > 0" class="mt-1 text-xs text-gray-600">{{ currentStepInfo() }}</div>
   </div>
 </template>

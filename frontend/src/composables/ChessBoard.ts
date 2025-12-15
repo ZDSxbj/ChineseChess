@@ -6,6 +6,22 @@ import channel from '@/utils/channel'
 import { ChessFactory, King } from './ChessPiece'
 import Drawer from './drawer'
 
+declare const window: any
+
+type CustomPieceType = 'King' | 'Advisor' | 'Bishop' | 'Horse' | 'Rook' | 'Cannon' | 'Pawn'
+export interface CustomPieceDefinition {
+  type: CustomPieceType
+  color: ChessColor
+  position: ChessPosition
+}
+export interface EndgameLayout {
+  pieces: CustomPieceDefinition[]
+  currentTurn: ChessColor
+  selfColor?: ChessColor
+  aiMode?: boolean
+  skipValidation?: boolean
+}
+
 class ChessBoard {
   private board: Board
   private gridSize: number
@@ -20,7 +36,9 @@ class ChessBoard {
   public currentRole: ChessRole = 'self'
   private isNetPlay: boolean = false
   private isAIPlay: boolean = false // 新增：标识是否为AI对战模式
+  private isEndgameMode: boolean = false
   private clickCallback: (event: MouseEvent) => void = () => {}
+  private eventsBound: boolean = false
   // 新增：存储走棋历史（记录移动前的状态）
   private moveHistory: Array<{
     from: ChessPosition
@@ -918,8 +936,10 @@ class ChessBoard {
   public start(color: ChessColor, isNet: boolean, isAI: boolean = false) {
     this.isNetPlay = isNet
     this.isAIPlay = isAI
+    this.isEndgameMode = false
     this.selfColor = color
     this.currentRole = color === 'red' ? 'self' : 'enemy'
+    this.moveHistory = []
     this.board = Array.from({ length: 9 }).fill(null).map(() => {
       return {}
     })
@@ -928,6 +948,59 @@ class ChessBoard {
     this.drawChesses()
     this.listenClick()
     this.listenEvent()
+  }
+
+  // Endgame entry: load custom layout with validation
+  public startEndgame(layout: EndgameLayout) {
+    const { pieces, currentTurn, selfColor = 'red', aiMode = true, skipValidation } = layout
+    const validation = skipValidation ? { valid: true, errors: [] } : ChessBoard.validateCustomLayout(pieces)
+    if (!validation.valid) {
+      const reason = validation.errors.join('; ')
+      console.error('[ChessBoard] Endgame layout invalid:', reason)
+      showMsg(`残局布局不合法：${reason}`)
+      return { success: false, reason }
+    }
+
+    this.isNetPlay = false
+    this.isAIPlay = aiMode
+    this.isEndgameMode = true
+    this.selfColor = selfColor
+    this.currentRole = currentTurn === selfColor ? 'self' : 'enemy'
+    this.moveHistory = []
+
+    // 重置棋盘画布与数据
+    this.board = Array.from({ length: 9 }).map(() => ({})) as Board
+    this.clear()
+    this.drawBoard()
+
+    // 将自定义棋子放置到棋盘
+    this.rebuildBoardFromPieces(pieces)
+    this.drawChesses()
+    this.listenClick()
+    this.listenEvent()
+    saveGameState({ isNetPlay: false, selfColor: this.selfColor, moveHistory: [], currentRole: this.currentRole })
+    return { success: true }
+  }
+
+  // 校验并快速评估残局布局是否可行
+  public static assessEndgameLayout(pieces: CustomPieceDefinition[], currentTurn: ChessColor) {
+    const validation = ChessBoard.validateCustomLayout(pieces)
+    if (!validation.valid) return { playable: false, issues: validation.errors }
+    const issues: string[] = []
+    try {
+      // 若引擎可用，确保先手非被将死/无着法
+      const board = ChessBoard.toEngineBoardFromPieces(pieces)
+      const logic = (window as any)?.logic
+      if (logic && typeof logic.isCheckmate === 'function') {
+        if (logic.isCheckmate(board, currentTurn)) issues.push('先手已被将死')
+      }
+      if (logic && typeof logic.hasAnyLegalMoves === 'function') {
+        if (!logic.hasAnyLegalMoves(board, currentTurn)) issues.push('先手无合法着法')
+      }
+    } catch (e: any) {
+      issues.push(e?.message || '布局可行性检测失败')
+    }
+    return { playable: issues.length === 0, issues }
   }
 
   // 专门用于复盘时执行的移动（只改变棋盘状态和绘制，不触发网络事件或胜负判定、回合切换等）
@@ -948,6 +1021,7 @@ class ChessBoard {
     this.chessesElement.removeEventListener('click', this.clickCallback)
     this.clear()
     channel.off('NET:CHESS:MOVE')
+    this.eventsBound = false
   }
 
   private listenMove(req: { from: ChessPosition, to: ChessPosition }) {
@@ -957,7 +1031,9 @@ class ChessBoard {
   }
 
   private listenEvent() {
+    if (this.eventsBound) return
     channel.on('NET:CHESS:MOVE', this.listenMove.bind(this))
+    this.eventsBound = true
   }
 
   private initChesses() {
@@ -1476,6 +1552,99 @@ class ChessBoard {
    */
   public getBoard(): Board {
     return this.board
+  }
+
+  // 依据自定义棋子列表重建棋盘（用于残局初始化）
+  private rebuildBoardFromPieces(pieces: CustomPieceDefinition[]) {
+    this.board = Array.from({ length: 9 }).map(() => ({})) as Board
+    let id = 0
+    pieces.forEach((piece) => {
+      const role: ChessRole = piece.color === this.selfColor ? 'self' : 'enemy'
+      const chessPiece = ChessFactory.createChessPiece(
+        this.chesses,
+        id++,
+        piece.type as any,
+        piece.color,
+        role,
+        piece.position.x,
+        this.gridSize,
+      )
+      chessPiece.position = { ...piece.position }
+      this.board[piece.position.x][piece.position.y] = chessPiece
+    })
+  }
+
+  // 静态方法：校验自定义布局的合法性
+  public static validateCustomLayout(pieces: CustomPieceDefinition[]) {
+    const errors: string[] = []
+    const seen = new Set<string>()
+    let redKing = 0
+    let blackKing = 0
+    const board: (CustomPieceDefinition | null)[][] = Array.from({ length: 9 }).map(() => Array(10).fill(null))
+    pieces.forEach((piece) => {
+      const { x, y } = piece.position
+      if (x < 0 || x > 8 || y < 0 || y > 9) {
+        errors.push(`棋子越界: ${piece.type}@${x},${y}`)
+        return
+      }
+      const key = `${x},${y}`
+      if (seen.has(key)) {
+        errors.push(`位置重复: ${key}`)
+        return
+      }
+      seen.add(key)
+      if (piece.type === 'King') {
+        const inPalace = x >= 3 && x <= 5 && (piece.color === 'red' ? y >= 7 && y <= 9 : y >= 0 && y <= 2)
+        if (!inPalace) errors.push('将/帅未在九宫')
+        piece.color === 'red' ? redKing++ : blackKing++
+      }
+      if (piece.type === 'Advisor') {
+        const inPalace = x >= 3 && x <= 5 && (piece.color === 'red' ? y >= 7 && y <= 9 : y >= 0 && y <= 2)
+        if (!inPalace) errors.push('士/仕未在九宫')
+      }
+      if (piece.type === 'Bishop') {
+        const ownHalf = piece.color === 'red' ? y >= 5 : y <= 4
+        if (!ownHalf) errors.push('象/相越河')
+      }
+      board[x][y] = piece
+    })
+
+    if (redKing !== 1 || blackKing !== 1) errors.push('需要红帅与黑将各一枚')
+
+    // 将帅照面检测
+    for (let x = 0; x < 9; x++) {
+      let redY: number | null = null
+      let blackY: number | null = null
+      for (let y = 0; y < 10; y++) {
+        const piece = board[x][y]
+        if (piece && piece.type === 'King') {
+          if (piece.color === 'red') redY = y
+          else blackY = y
+        }
+      }
+      if (redY !== null && blackY !== null) {
+        let blocked = false
+        for (let y = Math.min(redY, blackY) + 1; y < Math.max(redY, blackY); y++) {
+          if (board[x][y]) {
+            blocked = true
+            break
+          }
+        }
+        if (!blocked) errors.push('将帅照面')
+      }
+    }
+
+    return { valid: errors.length === 0, errors }
+  }
+
+  // 将自定义棋子列表转为 engine 所需的 board 矩阵
+  public static toEngineBoardFromPieces(pieces: CustomPieceDefinition[]) {
+    const board = Array.from({ length: 10 }, () => Array(9).fill(null))
+    const map: Record<CustomPieceType, string> = { King: 'k', Advisor: 'a', Bishop: 'b', Horse: 'n', Rook: 'r', Cannon: 'c', Pawn: 's' }
+    pieces.forEach((p) => {
+      board[p.position.y][p.position.x] = { t: map[p.type], c: p.color }
+    })
+    return board
   }
 }
 

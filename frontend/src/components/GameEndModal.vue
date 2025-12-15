@@ -9,6 +9,8 @@ export default defineComponent({
     result: { type: String as unknown as () => 'win' | 'lose' | 'draw' | null, required: false },
     onReview: { type: Function as PropType<() => void>, required: false },
     onQuit: { type: Function as PropType<() => void>, required: false },
+    hideReview: { type: Boolean, default: false },
+    messageOverride: { type: String, default: '' },
   },
   emits: ['close'],
   setup(props, { emit }) {
@@ -16,26 +18,26 @@ export default defineComponent({
     const message = ref('')
 
     watch(
-      () => props.visible,
-      (visible) => {
+      () => [props.visible, props.result, props.messageOverride],
+      ([visible]) => {
         if (!visible) {
           return
         }
         if (props.result === 'win') {
           title.value = '恭喜你，你赢了！'
-          message.value = '本局对局已经结束，你可以选择复盘或退出。'
+          message.value = props.messageOverride || '本局对局已经结束，你可以选择复盘或退出。'
         }
         else if (props.result === 'lose') {
           title.value = '很遗憾，你输了'
-          message.value = '对局结束，是否进入复盘查看过程？'
+          message.value = props.messageOverride || '对局结束，是否进入复盘查看过程？'
         }
         else if (props.result === 'draw') {
           title.value = '对局结束，本局和棋'
-          message.value = '本局已和棋，可以复盘查看。'
+          message.value = props.messageOverride || '本局已和棋，可以复盘查看。'
         }
         else {
           title.value = '对局结束'
-          message.value = '对局已结束，您可以选择复盘或退出。'
+          message.value = props.messageOverride || '对局已结束，您可以选择复盘或退出。'
         }
       },
       { immediate: true },
@@ -72,7 +74,7 @@ export default defineComponent({
       <p class="mb-6">{{ message }}</p>
       <div class="flex justify-around">
         <button class="rounded bg-gray-600 px-4 py-2 text-white" @click="handleQuit">退出</button>
-        <button class="rounded bg-blue-600 px-4 py-2 text-white" @click="handleReview">复盘</button>
+        <button v-if="!hideReview" class="rounded bg-blue-600 px-4 py-2 text-white" @click="handleReview">复盘</button>
       </div>
     </div>
   </div>
