@@ -40,7 +40,10 @@ const moveStack = ref<Array<'red' | 'black'>>([])
 const moveHistory = ref<Array<{ from: any; to: any; pieceName?: string; pieceColor?: string }>>([])
 const progressSaved = ref(false)
 
-const progressKey = 'endgame-progress'
+const getProgressKey = () => {
+  const userId = userStore.userInfo?.id || 'guest'
+  return `endgame-progress-${userId}`
+}
 interface ScenarioProgress {
   result?: 'win' | 'lose'
   attempts: number
@@ -65,7 +68,7 @@ const aiLabel = computed(() => {
 
 function loadProgress() {
   try {
-    const raw = localStorage.getItem(progressKey)
+    const raw = localStorage.getItem(getProgressKey())
     if (!raw) return
     progress.value = JSON.parse(raw)
   } catch (e) {
@@ -87,7 +90,7 @@ function saveProgress(id: string, result: 'win' | 'lose', steps?: number) {
   }
   progress.value[id] = newProgress
   try {
-    localStorage.setItem(progressKey, JSON.stringify(progress.value))
+    localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
   } catch (e) {
     console.warn('保存残局进度失败', e)
   }
@@ -213,9 +216,9 @@ function startReplay() {
     return
   }
   replayMode.value = true
-  replayIndex.value = 0
+  replayIndex.value = moveHistory.value.length
   resultModalVisible.value = false
-  applyReplaySteps(0)
+  applyReplaySteps(moveHistory.value.length)
 }
 
 function applyReplaySteps(n: number) {
@@ -532,7 +535,6 @@ onUnmounted(() => {
       <div v-if="replayMode" class="bg-purple-50 border border-purple-300 rounded-lg p-3 mb-4">
         <div class="text-sm font-semibold text-purple-900 mb-2 text-center">复盘模式</div>
         <div class="flex gap-2 justify-center mb-2">
-          <button class="rounded bg-gray-600 px-3 py-1 text-white text-sm" @click="exitReplay">退出复盘</button>
           <button class="rounded bg-blue-600 px-3 py-1 text-white text-sm" @click="replayRestart">重新开始</button>
         </div>
         <div class="flex gap-2 justify-center mb-2">

@@ -2,9 +2,16 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { endgameScenarios } from '@/data/endgameData'
+import { useUserStore } from '@/store/useStore'
 
 const router = useRouter()
-const progressKey = 'endgame-progress'
+const userStore = useUserStore()
+
+const getProgressKey = () => {
+  const userId = userStore.userInfo?.id || 'guest'
+  return `endgame-progress-${userId}`
+}
+
 interface ScenarioProgress {
   result?: 'win' | 'lose'
   attempts: number
@@ -14,7 +21,7 @@ const progress = ref<Record<string, ScenarioProgress>>({})
 
 function loadProgress() {
   try {
-    const raw = localStorage.getItem(progressKey)
+    const raw = localStorage.getItem(getProgressKey())
     if (!raw) return
     progress.value = JSON.parse(raw)
   } catch (e) {
