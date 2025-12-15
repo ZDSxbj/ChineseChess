@@ -3,6 +3,7 @@ import {
   presetAttributify,
   presetUno,
   presetWind3,
+  presetIcons,
 } from 'unocss'
 
 export default defineConfig({
@@ -10,6 +11,14 @@ export default defineConfig({
     presetAttributify(),
     presetWind3(),
     presetUno(),
+    // 允许使用 i-carbon-* 等图标类
+    presetIcons({
+      scale: 1.1,
+      extraProperties: {
+        display: 'inline-block',
+        'vertical-align': 'middle',
+      },
+    }),
   ],
   rules: [
     [/^scrollbar-thin$/, () => ({
