@@ -30,6 +30,8 @@ class ChessBoard {
     pieceName?: string
     pieceColor?: ChessColor
   }> = []
+  // 提示位置
+  private hintPositions: ChessPosition[] = []
   // 对战音效（选中与落子）
   private selectAudio?: HTMLAudioElement
   private clickAudio?: HTMLAudioElement
@@ -118,6 +120,7 @@ class ChessBoard {
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
     piece.move(to)
+    this.drawChesses()
 
     // 发出最近一步走子事件（包含棋子名和阵营），以便 UI 显示最近落子
     try {
@@ -373,6 +376,8 @@ class ChessBoard {
       if (piece === this.selectedPiece) {
         this.selectedPiece.deselect()
         this.selectedPiece = null
+        this.hintPositions = []
+        this.drawChesses()
         return
       }
       if (!piece || piece.color !== this.selectedPiece.color) {
@@ -380,6 +385,8 @@ class ChessBoard {
         this.move(curPiece.position, { x, y })
         this.selectedPiece.deselect()
         this.selectedPiece = null
+        this.hintPositions = []
+        this.drawChesses()
         return
       }
     }
@@ -454,6 +461,7 @@ class ChessBoard {
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
     piece.move(to)
+    this.drawChesses()
     // 非吃子落子音效（仅联机时启用，先不播放吃子，等判定是否将军后再决定）
     if (this.isNetPlay && !targetPiece) {
       try {
@@ -808,6 +816,70 @@ class ChessBoard {
     this.chessesElement.removeEventListener('click', this.clickCallback)
   }
 
+  private isMoveSafe(piece: ChessPiece, to: ChessPosition): boolean {
+    const from = piece.position
+    const savedPiece = this.board[to.x][to.y]
+    const originalPos = { ...piece.position }
+    
+    // Temporarily move
+    delete this.board[from.x][from.y]
+    this.board[to.x][to.y] = piece
+    piece.position = to
+
+    const wouldBeInCheck = this.isInCheck(piece.color)
+
+    // Restore
+    piece.position = originalPos
+    this.board[from.x][from.y] = piece
+    if (savedPiece) {
+      this.board[to.x][to.y] = savedPiece
+    } else {
+      delete this.board[to.x][to.y]
+    }
+
+    return !wouldBeInCheck
+  }
+
+  private calculateHints(piece: ChessPiece) {
+    this.hintPositions = []
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const targetPos = { x, y }
+        // Check if move is valid according to piece rules
+        if (!piece.isMoveValid(targetPos, this.board)) {
+          continue
+        }
+        
+        // Check if target is occupied by own piece
+        const targetPiece = this.board[x][y]
+        if (targetPiece && targetPiece.color === piece.color) {
+          continue
+        }
+
+        // Check if move causes self-check
+        if (!this.isMoveSafe(piece, targetPos)) {
+          continue
+        }
+
+        this.hintPositions.push(targetPos)
+      }
+    }
+  }
+
+  private drawHints() {
+    this.hintPositions.forEach(pos => {
+      // Only draw if empty (as per user request: "if it can eat a certain piece, that piece does not need to be marked")
+      if (!this.board[pos.x][pos.y]) {
+        const x = pos.x * this.gridSize + this.gridSize / 2
+        const y = pos.y * this.gridSize + this.gridSize / 2
+        this.chesses.beginPath()
+        this.chesses.arc(x, y, 5, 0, Math.PI * 2) // Small red dot
+        this.chesses.fillStyle = 'red'
+        this.chesses.fill()
+      }
+    })
+  }
+
   private selectPiece(piece: ChessPiece) {
     if (!this.isNetPlay) {
       // 本地
@@ -825,12 +897,18 @@ class ChessBoard {
     if (this.selectedPiece === piece) {
       this.selectedPiece.deselect()
       this.selectedPiece = null
+      this.hintPositions = []
+      this.drawChesses()
       return
     }
 
     this.selectedPiece?.deselect()
     this.selectedPiece = piece
     piece.select()
+    
+    this.calculateHints(piece)
+    this.drawChesses()
+
     // 选中棋子音效（仅联机时启用）
     if (this.isNetPlay) {
       this.selectAudio?.play().catch(() => {})
@@ -875,6 +953,7 @@ class ChessBoard {
   private listenMove(req: { from: ChessPosition, to: ChessPosition }) {
     const { from, to } = req
     this.move(from, to)
+    this.drawChesses()
   }
 
   private listenEvent() {
@@ -1111,26 +1190,88 @@ class ChessBoard {
     this.chesses.clearRect(0, 0, this.width, this.height)
   }
 
+  private drawSelectionBox(x: number, y: number) {
+    const ctx = this.chesses
+    const gridSize = this.gridSize
+    const half = gridSize / 2
+    const len = gridSize / 6
+    const padding = 1
+    
+    const centerX = x * gridSize + half
+    const centerY = y * gridSize + half
+
+    ctx.lineWidth = 3
+    ctx.strokeStyle = 'red'
+    ctx.lineCap = 'square'
+
+    // Top Left
+    ctx.beginPath()
+    ctx.moveTo(centerX - half + padding, centerY - half + padding + len)
+    ctx.lineTo(centerX - half + padding, centerY - half + padding)
+    ctx.lineTo(centerX - half + padding + len, centerY - half + padding)
+    ctx.stroke()
+
+    // Top Right
+    ctx.beginPath()
+    ctx.moveTo(centerX + half - padding - len, centerY - half + padding)
+    ctx.lineTo(centerX + half - padding, centerY - half + padding)
+    ctx.lineTo(centerX + half - padding, centerY - half + padding + len)
+    ctx.stroke()
+
+    // Bottom Right
+    ctx.beginPath()
+    ctx.moveTo(centerX + half - padding, centerY + half - padding - len)
+    ctx.lineTo(centerX + half - padding, centerY + half - padding)
+    ctx.lineTo(centerX + half - padding - len, centerY + half - padding)
+    ctx.stroke()
+
+    // Bottom Left
+    ctx.beginPath()
+    ctx.moveTo(centerX - half + padding + len, centerY + half - padding)
+    ctx.lineTo(centerX - half + padding, centerY + half - padding)
+    ctx.lineTo(centerX - half + padding, centerY + half - padding - len)
+    ctx.stroke()
+  }
+
   private drawChesses() {
     this.chesses.clearRect(0, 0, this.width, this.height)
+    this.drawHints()
     this.board.forEach((row, _) => {
       Object.values(row).forEach((piece) => {
         piece.draw(this.gridSize)
       })
     })
+
+    // Draw last move indicators
+    if (this.moveHistory.length > 0) {
+      const lastMove = this.moveHistory[this.moveHistory.length - 1]
+      this.drawSelectionBox(lastMove.from.x, lastMove.from.y)
+      this.drawSelectionBox(lastMove.to.x, lastMove.to.y)
+    }
   }
 
   private drawBoard() {
     this.background.clearRect(0, 0, this.width, this.height)
-    this.background.strokeStyle = '#000'
-    this.background.lineWidth = 2
-
-    // Set background color
-    this.background.fillStyle = '#f4d1a4'
+    
+    // Set background color (Wood texture color)
+    this.background.fillStyle = '#eecfa1'
     this.background.fillRect(0, 0, this.width, this.height)
 
     const offsetX = this.gridSize / 2
     const offsetY = this.gridSize / 2
+
+    // Draw thick border around the grid
+    this.background.strokeStyle = '#5d4037' // Dark brown
+    this.background.lineWidth = 4
+    this.background.strokeRect(
+      offsetX - 5,
+      offsetY - 5,
+      8 * this.gridSize + 10,
+      9 * this.gridSize + 10
+    )
+
+    this.background.strokeStyle = '#5d4037' // Dark brown for grid lines
+    this.background.lineWidth = 1.5
 
     const lineDrawer = Drawer.drawLine.bind(null, this.background)
 
@@ -1161,11 +1302,24 @@ class ChessBoard {
       )
     }
 
-    this.background.font = '20px Arial'
-    this.background.fillStyle = '#000'
+    // River text
+    this.background.font = '30px KaiTi, SimHei, Arial'
+    this.background.fillStyle = '#5d4037'
     this.background.textAlign = 'center'
-    this.background.fillText('楚 河', offsetX + 2 * this.gridSize, offsetY + 4.5 * this.gridSize)
-    this.background.fillText('汉 界', offsetX + 6 * this.gridSize, offsetY + 4.5 * this.gridSize)
+    this.background.textBaseline = 'middle'
+    
+    // Rotate text for traditional look if desired, but simple placement first
+    this.background.save()
+    this.background.translate(offsetX + 2 * this.gridSize, offsetY + 4.5 * this.gridSize)
+    // this.background.rotate(-Math.PI / 2) // Optional rotation
+    this.background.fillText('楚 河', 0, 0)
+    this.background.restore()
+
+    this.background.save()
+    this.background.translate(offsetX + 6 * this.gridSize, offsetY + 4.5 * this.gridSize)
+    // this.background.rotate(Math.PI / 2) // Optional rotation
+    this.background.fillText('汉 界', 0, 0)
+    this.background.restore()
 
     // Draw the palaces (九宫)
     // Top palace
@@ -1197,6 +1351,7 @@ class ChessBoard {
       offsetY + 9 * this.gridSize,
     )
 
+    // Vertical lines for river sides
     lineDrawer(
       offsetX,
       offsetY + 4 * this.gridSize,

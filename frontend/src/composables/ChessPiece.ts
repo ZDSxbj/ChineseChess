@@ -59,29 +59,85 @@ class ChessPiece {
     const ctx = this.ctx
     const x = this.position.x * this.gridSize + this.gridSize / 2
     const y = this.position.y * this.gridSize + this.gridSize / 2
+    const radius = this.radius - 3 // Slightly smaller to leave room for shadow
+
+    // Shadow for 3D effect
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
+    ctx.shadowBlur = 6
+    ctx.shadowOffsetX = 3
+    ctx.shadowOffsetY = 3
+
+    // Main piece body (Light yellow/cream)
     ctx.beginPath()
-    ctx.arc(x, y, this.radius, 0, Math.PI * 2)
-    ctx.fillStyle = this.color === 'red' ? '#f44336' : '#212121'
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.fillStyle = '#fdf5e6' // Light cream color
     ctx.fill()
 
-    // 绘制内圆
+    // Reset shadow for details
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+
+    const pieceColor = this.color === 'red' ? '#d32f2f' : '#212121'
+
+    // Outer border
     ctx.beginPath()
-    ctx.arc(x, y, this.radius - 3, 0, Math.PI * 2)
-    ctx.strokeStyle = this.color === 'red' ? '#ffcccc' : '#666666'
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.strokeStyle = pieceColor
+    ctx.lineWidth = 2
+    ctx.stroke()
+
+    // Inner ring
+    ctx.beginPath()
+    ctx.arc(x, y, radius - 5, 0, Math.PI * 2)
+    ctx.strokeStyle = pieceColor
     ctx.lineWidth = 1
     ctx.stroke()
 
-    ctx.fillStyle = this.color === 'red' ? '#ffffff' : '#ffffff'
-    ctx.font = 'bold 20px SimHei, Arial'
+    // Text
+    ctx.fillStyle = pieceColor
+    // Use KaiTi (楷体) for traditional look, fallback to SimHei/Arial
+    ctx.font = `bold ${this.gridSize * 0.5}px KaiTi, SimHei, Arial`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(this.name, x, y)
+    ctx.fillText(this.name, x, y + 2)
 
     if (this.isSelected) {
-      ctx.beginPath()
-      ctx.arc(x, y, this.radius, 0, Math.PI * 2)
-      ctx.strokeStyle = '#fbbf24'
+      const half = this.gridSize / 2
+      const len = this.gridSize / 6
+      const padding = 1
+
       ctx.lineWidth = 3
+      ctx.strokeStyle = 'red'
+      ctx.lineCap = 'square'
+
+      // Top Left
+      ctx.beginPath()
+      ctx.moveTo(x - half + padding, y - half + padding + len)
+      ctx.lineTo(x - half + padding, y - half + padding)
+      ctx.lineTo(x - half + padding + len, y - half + padding)
+      ctx.stroke()
+
+      // Top Right
+      ctx.beginPath()
+      ctx.moveTo(x + half - padding - len, y - half + padding)
+      ctx.lineTo(x + half - padding, y - half + padding)
+      ctx.lineTo(x + half - padding, y - half + padding + len)
+      ctx.stroke()
+
+      // Bottom Right
+      ctx.beginPath()
+      ctx.moveTo(x + half - padding, y + half - padding - len)
+      ctx.lineTo(x + half - padding, y + half - padding)
+      ctx.lineTo(x + half - padding - len, y + half - padding)
+      ctx.stroke()
+
+      // Bottom Left
+      ctx.beginPath()
+      ctx.moveTo(x - half + padding + len, y + half - padding)
+      ctx.lineTo(x - half + padding, y + half - padding)
+      ctx.lineTo(x - half + padding, y + half - padding - len)
       ctx.stroke()
     }
   }
