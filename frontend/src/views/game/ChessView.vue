@@ -526,123 +526,162 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col sm:flex-row">
-    <div class="block h-1/5 sm:h-full flex-1" />
-    <div class="relative h-3/5 w-full sm:h-full sm:w-5/12 flex flex-col">
-      <div class="relative flex-1 w-full">
-        <canvas
-          ref="background"
-          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        />
-        <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
-      </div>
-      <div class="flex justify-center space-x-4 mb-20">
-        <!-- 新增悔棋按钮 -->
-        <button
-          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-          text="black xl"
-          hover="bg-gray-9 text-gray-2"
-          @click="regret"
-        >
-          悔棋
-        </button>
-        <!-- 原有的认输按钮 -->
-        <button
-          v-if="networkPlay"
-          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-          text="black xl"
-          hover="bg-gray-9 text-gray-2"
-          @click="confirmGiveUp"
-        >
-          认输
-        </button>
-        <!-- 新增和棋按钮 -->
-        <button
-          v-if="networkPlay"
-          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-          text="black xl"
-          hover="bg-gray-9 text-gray-2"
-          @click="offerDraw"
-        >
-          和棋
-        </button>
-        <!-- 原有的退出按钮 -->
-        <button
-          class="border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-          text="black xl"
-          hover="bg-gray-9 text-gray-2"
-          @click="quit"
-        >
-          退出
-        </button>
-      </div>
+  <div class="h-full w-full bg-[#fdf6e3] flex flex-col sm:flex-row relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 pointer-events-none">
+      <div class="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-amber-200/20 blur-3xl"></div>
+      <div class="absolute top-[40%] -right-[10%] w-[60%] h-[60%] rounded-full bg-orange-200/20 blur-3xl"></div>
     </div>
-    <div class="sm:h-full flex-1 flex flex-col pt-12 pb-20 pr-48">
-      <!-- 新增：用户信息面板 -->
-      <div v-if="networkPlay" class="bg-white/80 backdrop-blur rounded-xl shadow-sm p-4 mb-4 flex flex-col border border-gray-200">
-        <div class="flex items-center justify-between w-full mb-4">
-          <div class="flex flex-col items-center w-1/3">
-            <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" class="w-12 h-12 rounded-full mb-1 object-cover border-2 border-red-500" />
-            <span class="text-xs truncate w-full text-center font-medium">{{ userStore.userInfo?.name }}</span>
-            <span class="text-xs font-bold mt-1" :class="selfColor === 'red' ? 'text-red-600' : 'text-black'">{{ selfColor === 'red' ? '红方' : '黑方' }}</span>
-          </div>
-          <div class="text-2xl font-black text-gray-400 italic mx-2">VS</div>
-          <div class="flex flex-col items-center w-1/3">
-            <img :src="opponentInfo?.avatar || '/images/default_avatar.png'" class="w-12 h-12 rounded-full mb-1 object-cover border-2 border-black" />
-            <span class="text-xs truncate w-full text-center font-medium">{{ opponentInfo?.name || '对手' }}</span>
-            <span class="text-xs font-bold mt-1" :class="selfColor === 'red' ? 'text-black' : 'text-red-600'">{{ selfColor === 'red' ? '黑方' : '红方' }}</span>
-          </div>
+
+    <!-- 主布局容器 -->
+    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1600px] mx-auto w-full p-2 sm:p-4 gap-4 sm:gap-8">
+
+      <!-- 左侧/中间：棋盘区域 -->
+      <div class="flex-1 flex flex-col items-center justify-center min-h-0">
+        <!-- 棋盘容器 -->
+        <div class="relative w-full max-w-[650px] aspect-[9/10] flex items-center justify-center">
+          <!-- 棋盘背景装饰 -->
+          <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
+
+          <canvas
+            ref="background"
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-2xl rounded-lg"
+          />
+          <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" />
         </div>
-          <div class="flex justify-between w-full space-x-2">
-          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">经验</span>
-              <span class="font-bold text-gray-700">{{ userStore.userInfo?.exp || 0 }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">场次</span>
-              <span class="font-bold text-gray-700">{{ userStore.userInfo?.totalGames || 0 }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(2) }}%</span>
-            </div>
-          </div>
-          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">经验</span>
-              <span class="font-bold text-gray-700">{{ opponentInfo?.exp || 0 }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">场次</span>
-              <span class="font-bold text-gray-700">{{ opponentInfo?.totalGames || 0 }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (opponentInfo?.winRate || 0).toFixed(2) }}%</span>
-            </div>
-          </div>
+
+        <!-- 底部按钮栏 -->
+        <div class="mt-6 flex flex-wrap justify-center gap-3 sm:gap-6 w-full max-w-[600px]">
+          <!-- 悔棋按钮 -->
+          <button
+            class="group relative px-6 py-2.5 bg-amber-100 text-amber-900 rounded-xl font-bold shadow-sm hover:bg-amber-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-amber-200"
+            @click="regret"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            悔棋
+          </button>
+
+          <!-- 认输按钮 -->
+          <button
+            v-if="networkPlay"
+            class="group relative px-6 py-2.5 bg-red-50 text-red-700 rounded-xl font-bold shadow-sm hover:bg-red-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-red-100"
+            @click="confirmGiveUp"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h14a2 2 0 012 2v8M3 21h18M5 21v-8a2 2 0 012-2h14a2 2 0 012 2v8" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            认输
+          </button>
+
+          <!-- 和棋按钮 -->
+          <button
+            v-if="networkPlay"
+            class="group relative px-6 py-2.5 bg-blue-50 text-blue-700 rounded-xl font-bold shadow-sm hover:bg-blue-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-blue-100"
+            @click="offerDraw"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            和棋
+          </button>
+
+          <!-- 退出按钮 -->
+          <button
+            class="group relative px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold shadow-sm hover:bg-gray-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-gray-200"
+            @click="quit"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            退出
+          </button>
         </div>
       </div>
 
-      <!-- 游戏信息（当前回合 / 最近落子） - 仅联机模式显示 -->
-      <div v-if="networkPlay" class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-        <div class="text-sm font-semibold text-blue-900 mb-2">游戏信息</div>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <div class="flex justify-between">
-            <span class="text-gray-600">当前回合:</span>
-            <span class="font-bold">{{ currentTurn }}</span>
+      <!-- 右侧：信息面板 -->
+      <div class="w-full sm:w-80 lg:w-96 flex flex-col gap-4 h-[30vh] sm:h-full overflow-hidden">
+        <!-- 用户信息面板 -->
+        <div v-if="networkPlay" class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-4 border border-white/50 flex flex-col">
+          <div class="flex items-center justify-between w-full mb-4">
+            <!-- 我方 -->
+            <div class="flex flex-col items-center w-1/3 group">
+              <div class="relative">
+                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" class="w-14 h-14 rounded-full mb-2 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="selfColor === 'red' ? 'border-red-500' : 'border-gray-800'" />
+                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm" :class="selfColor === 'red' ? 'bg-red-500' : 'bg-gray-800'">
+                  {{ selfColor === 'red' ? '红' : '黑' }}
+                </div>
+              </div>
+              <span class="text-sm truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
+            </div>
+
+            <!-- VS -->
+            <div class="flex flex-col items-center justify-center">
+              <span class="text-3xl font-black text-amber-200/80 italic">VS</span>
+            </div>
+
+            <!-- 对手 -->
+            <div class="flex flex-col items-center w-1/3 group">
+              <div class="relative">
+                <img :src="opponentInfo?.avatar || '/images/default_avatar.png'" class="w-14 h-14 rounded-full mb-2 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="selfColor === 'red' ? 'border-gray-800' : 'border-red-500'" />
+                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm" :class="selfColor === 'red' ? 'bg-gray-800' : 'bg-red-500'">
+                  {{ selfColor === 'red' ? '黑' : '红' }}
+                </div>
+              </div>
+              <span class="text-sm truncate w-full text-center font-bold text-amber-900">{{ opponentInfo?.name || '对手' }}</span>
+            </div>
           </div>
-          <div class="flex justify-between">
-            <span class="text-gray-600">最近落子:</span>
-            <span class="font-bold">{{ lastMove }}</span>
+
+          <!-- 数据对比 -->
+          <div class="flex justify-between w-full gap-2">
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-amber-800/60">胜率</span>
+                <span class="font-bold text-amber-900">{{ (userStore.userInfo?.winRate || 0).toFixed(0) }}%</span>
+              </div>
+              <div class="w-full bg-amber-200/30 h-1.5 rounded-full overflow-hidden">
+                <div class="h-full bg-amber-500 rounded-full" :style="{ width: `${userStore.userInfo?.winRate || 0}%` }"></div>
+              </div>
+            </div>
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-amber-800/60">胜率</span>
+                <span class="font-bold text-amber-900">{{ (opponentInfo?.winRate || 0).toFixed(0) }}%</span>
+              </div>
+              <div class="w-full bg-amber-200/30 h-1.5 rounded-full overflow-hidden">
+                <div class="h-full bg-gray-600 rounded-full" :style="{ width: `${opponentInfo?.winRate || 0}%` }"></div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 聊天面板 -->
-      <div class="flex-1 overflow-hidden flex flex-col">
-        <ChatPanel v-if="networkPlay" ref="chatPanelRef" :ws="ws" />
+        <!-- 游戏信息 -->
+        <div v-if="networkPlay" class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-1 h-4 bg-amber-500 rounded-full"></div>
+            <span class="text-sm font-bold text-amber-900">对局信息</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">当前回合</span>
+              <span class="font-bold text-amber-900 text-lg">{{ currentTurn }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">最近落子</span>
+              <span class="font-mono font-bold text-amber-900 text-lg">{{ lastMove }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 聊天面板 -->
+        <div class="flex-1 overflow-hidden flex flex-col bg-white/60 backdrop-blur-md rounded-2xl shadow-sm border border-white/50">
+          <ChatPanel v-if="networkPlay" ref="chatPanelRef" :ws="ws" />
+          <div v-else class="flex-1 flex items-center justify-center text-amber-800/40 font-medium">
+            本地对战模式
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -88,24 +88,44 @@ function handleReject() {
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="w-64 rounded-lg bg-white p-6 shadow-lg">
-      <h3 class="mb-4 text-xl font-bold">{{ title }}</h3>
-      <p v-if="showCountdown" class="mb-4">
-        {{ message }} {{ countdown }}秒后自动{{ autoAction }}
-      </p>
-      <p v-else class="mb-4">{{ message }}</p>
-      <div v-if="showButtons" class="flex justify-around">
+  <div v-if="visible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div class="w-80 rounded-2xl bg-[#fdf6e3] p-6 shadow-2xl border-4 border-amber-200">
+      <h3 class="mb-4 text-xl font-black text-amber-900 border-b border-amber-200 pb-3 text-center">{{ title }}</h3>
+
+      <div class="text-center mb-6">
+        <p v-if="showCountdown" class="text-amber-800 font-medium">
+          {{ message }}
+          <br/>
+          <span class="text-sm text-amber-600 mt-2 block font-bold bg-amber-100 py-1 px-3 rounded-full inline-block mx-auto">
+            {{ countdown }}秒后自动{{ autoAction }}
+          </span>
+        </p>
+        <p v-else class="text-amber-800 font-medium flex items-center justify-center gap-2">
+          <svg class="animate-spin h-5 w-5 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          {{ message }}
+        </p>
+      </div>
+
+      <div v-if="showButtons" class="flex justify-center gap-4">
         <button
-          class="rounded bg-green-500 px-4 py-2 text-white"
+          class="flex-1 rounded-xl bg-emerald-600 text-white px-4 py-2.5 font-bold shadow-md hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1"
           @click="handleAccept"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
           同意
         </button>
         <button
-          class="rounded bg-red-500 px-4 py-2 text-white"
+          class="flex-1 rounded-xl bg-red-500 text-white px-4 py-2.5 font-bold shadow-md hover:bg-red-600 transition-colors flex items-center justify-center gap-1"
           @click="handleReject"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
           拒绝
         </button>
       </div>

@@ -100,18 +100,18 @@ function enterReplay(record: GameRecordItem) {
       // 2. 新格式：每5个字符表示一步 "6665r" 表示红方从(6,6)走到(6,5)，最后一位是颜色标记(r/b)
       const s = raw.trim()
       const moves: any[] = []
-      
+
       // 检测格式：如果第5个字符是r或b，则为新格式
       const hasColorCode = s.length >= 5 && (s[4] === 'r' || s[4] === 'b')
       const stepSize = hasColorCode ? 5 : 4
-      
+
       for (let i = 0; i + 3 < s.length; i += stepSize) {
         const fromX = Number(s[i])
         const fromY = Number(s[i + 1])
         const toX = Number(s[i + 2])
         const toY = Number(s[i + 3])
         const colorCode = hasColorCode && i + 4 < s.length ? s[i + 4] : null
-        
+
         if (!Number.isNaN(fromX) && !Number.isNaN(fromY) && !Number.isNaN(toX) && !Number.isNaN(toY)) {
           moves.push({
             from: { x: fromX, y: fromY },
@@ -189,202 +189,98 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="game-records-container">
-    <h2 class="title">对局记录</h2>
+  <div class="max-w-5xl mx-auto p-8 animate-fade-in">
+    <h2 class="text-2xl font-black text-amber-900 mb-8 flex items-center gap-3">
+      <div class="i-carbon-game-console text-3xl"></div>
+      对局记录
+    </h2>
 
-    <div v-if="loading" class="loading">
-      加载中...
+    <div v-if="loading" class="flex flex-col items-center justify-center py-20 text-amber-800/60">
+      <div class="w-12 h-12 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mb-4"></div>
+      <p class="font-medium">正在加载记录...</p>
     </div>
 
-    <div v-else-if="records.length === 0" class="empty">
-      暂无对局记录
+    <div v-else-if="records.length === 0" class="text-center py-20 bg-white/40 rounded-2xl border border-amber-100">
+      <div class="i-carbon-catalog text-6xl text-amber-200 mb-4 mx-auto"></div>
+      <p class="text-amber-800/60 font-medium">暂无对局记录</p>
     </div>
 
-    <div v-else class="records-list">
+<div v-else class="flex flex-col space-y-4">
       <div
         v-for="record in records"
         :key="record.id"
-        class="record-card"
+        class="group relative bg-white border border-amber-100 rounded-xl p-0 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden"
         @click="enterReplay(record)"
       >
-        <div class="card-header">
-          <div class="result-badge" :class="getResultClass(record.result)">
-            {{ getResultText(record.result) }}
-          </div>
-          <div class="game-type">{{ getGameTypeText(record.game_type) }}</div>
-        </div>
+        <!-- 左侧装饰条 -->
+        <div
+          class="absolute left-0 top-0 bottom-0 w-1.5 transition-colors duration-300"
+          :class="{
+            'bg-orange-500': record.result === 0,
+            'bg-gray-400': record.result === 1,
+            'bg-amber-300': record.result === 2
+          }"
+        ></div>
 
-        <div class="card-body">
-          <div class="info-row">
-            <span class="label">执子：</span>
-            <span class="value" :class="record.is_red ? 'text-red' : 'text-black'">
-              {{ getColorText(record.is_red) }}
+        <div class="flex items-center p-4 pl-6">
+          <!-- 结果与类型 -->
+          <div class="flex flex-col items-center mr-6 min-w-[80px]">
+            <span
+              class="text-xl font-black tracking-wider"
+              :class="{
+                'text-orange-600': record.result === 0,
+                'text-gray-500': record.result === 1,
+                'text-amber-600': record.result === 2
+              }"
+            >
+              {{ getResultText(record.result) }}
+            </span>
+            <span class="text-xs text-amber-800/60 mt-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+              {{ getGameTypeText(record.game_type) }}
             </span>
           </div>
 
-          <div class="info-row">
-            <span class="label">对手：</span>
-            <span class="value">{{ record.opponent_name }}</span>
+          <!-- 分割线 -->
+          <div class="w-px h-10 bg-amber-100 mr-6 hidden sm:block"></div>
+
+          <!-- 主要信息网格 -->
+          <div class="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
+            <!-- 执子 -->
+            <div class="flex flex-col">
+              <span class="text-xs text-amber-800/40 mb-0.5 font-medium">执子</span>
+              <span class="font-bold flex items-center gap-1.5 text-amber-900">
+                <span class="w-3 h-3 rounded-full shadow-sm border border-black/10" :class="record.is_red ? 'bg-red-500' : 'bg-gray-800'"></span>
+                {{ getColorText(record.is_red) }}
+              </span>
+            </div>
+
+            <!-- 对手 -->
+            <div class="flex flex-col">
+              <span class="text-xs text-amber-800/40 mb-0.5 font-medium">对手</span>
+              <span class="font-bold text-amber-900 truncate max-w-[120px]">{{ record.opponent_name }}</span>
+            </div>
+
+            <!-- 步数 -->
+            <div class="flex flex-col">
+              <span class="text-xs text-amber-800/40 mb-0.5 font-medium">步数</span>
+              <span class="font-mono font-bold text-amber-900">{{ record.total_steps }}</span>
+            </div>
+
+            <!-- 时间 -->
+            <div class="flex flex-col">
+              <span class="text-xs text-amber-800/40 mb-0.5 font-medium">时间</span>
+              <span class="text-xs text-amber-900/70 font-mono">{{ formatDate(record.start_time) }}</span>
+            </div>
           </div>
 
-          <div class="info-row">
-            <span class="label">总步数：</span>
-            <span class="value">{{ record.total_steps }}</span>
+          <!-- 箭头 -->
+          <div class="ml-4 text-amber-200 group-hover:text-amber-500 transition-colors transform group-hover:translate-x-1 duration-300">
+            <div class="i-carbon-chevron-right text-2xl"></div>
           </div>
-
-          <div class="info-row">
-            <span class="label">时间：</span>
-            <span class="value time">{{ formatDate(record.start_time) }}</span>
-          </div>
-        </div>
-
-        <div class="card-footer">
-          <span class="replay-hint">点击查看复盘 →</span>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<style scoped>
-.game-records-container {
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 20px;
-}
 
-.title {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 20px;
-  color: #333;
-  text-align: center;
-}
-
-.loading,
-.empty {
-  text-align: center;
-  padding: 40px;
-  color: #999;
-  font-size: 16px;
-}
-
-.records-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.record-card {
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.record-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
-  border-color: #4a90e2;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.result-badge {
-  font-size: 18px;
-  font-weight: bold;
-  padding: 4px 12px;
-  border-radius: 4px;
-  min-width: 50px;
-  text-align: center;
-}
-
-.result-win {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.result-lose {
-  background: #ffebee;
-  color: #c62828;
-}
-
-.result-draw {
-  background: #fff3e0;
-  color: #ef6c00;
-}
-
-.game-type {
-  font-size: 14px;
-  color: #666;
-  background: #f5f5f5;
-  padding: 4px 10px;
-  border-radius: 4px;
-}
-
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.info-row {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-}
-
-.label {
-  color: #666;
-  min-width: 70px;
-  font-weight: 500;
-}
-
-.value {
-  color: #333;
-}
-
-.text-red {
-  color: #d32f2f;
-  font-weight: bold;
-}
-
-.text-black {
-  color: #424242;
-  font-weight: bold;
-}
-
-.time {
-  font-size: 13px;
-  color: #999;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.replay-hint {
-  font-size: 13px;
-  color: #4a90e2;
-  font-weight: 500;
-}
-
-.record-card:hover .replay-hint {
-  color: #2a70c2;
-}
-</style>

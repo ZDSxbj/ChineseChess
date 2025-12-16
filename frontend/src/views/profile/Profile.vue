@@ -1,139 +1,191 @@
 <template>
-  <div class="profile-container">
+  <div class="max-w-4xl mx-auto p-8 animate-fade-in">
     <!-- 加载状态 -->
-    <div v-if="isLoading" class="loading">
-      <div class="spinner"></div>
-      <p>正在加载数据...</p>
+    <div v-if="isLoading" class="flex flex-col items-center justify-center py-20 text-amber-800/60">
+      <div class="w-12 h-12 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin mb-4"></div>
+      <p class="font-medium">正在加载数据...</p>
     </div>
 
     <!-- 错误状态 -->
-    <div v-else-if="hasError" class="error">
-      <p>加载失败，请稍后重试。</p>
-      <button @click="initForm()">重试</button>
+    <div v-else-if="hasError" class="text-center py-20">
+      <p class="text-red-600 mb-4 font-medium">加载失败，请稍后重试。</p>
+      <button @click="initForm()" class="px-6 py-2 bg-amber-100 text-amber-900 rounded-lg hover:bg-amber-200 transition-colors font-bold">重试</button>
     </div>
 
     <!-- 表单内容区 -->
-    <form v-else class="profile-form" @submit.prevent>
-      <div class="form-group">
-        <label class="form-label">头像</label>
-        <div class="avatar-upload">
-          <!-- 如果没有头像则不渲染 img，保持空白 -->
-          <img v-if="formData.avatar" :src="formData.avatar" alt="" class="avatar-img" @error="handleAvatarError" />
-          <div v-else class="avatar-empty"></div>
+    <form v-else class="relative bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm border border-amber-100 p-8 overflow-hidden" @submit.prevent>
+      <!-- 装饰元素 -->
+      <div class="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-amber-200/60 rounded-tl-2xl pointer-events-none"></div>
+      <div class="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-amber-200/60 rounded-br-2xl pointer-events-none"></div>
+      <div class="absolute top-4 right-4 text-amber-900/5 pointer-events-none">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-32 h-32">
+          <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clip-rule="evenodd" />
+        </svg>
+      </div>
 
-          <input type="file" id="avatar-input" class="avatar-input" accept="image/*" @change="handleAvatarChange" :disabled="isUploadingAvatar" />
-          <label for="avatar-input" class="upload-btn">{{ isDefaultAvatar ? '上传头像' : '修改头像' }}</label>
+      <div class="flex items-center py-6 border-b border-amber-200/50 relative z-10">
+        <label class="w-24 font-bold text-amber-900">头像</label>
+        <div class="flex items-center gap-6">
+          <!-- 如果没有头像则不渲染 img，保持空白 -->
+          <div class="relative group">
+            <img v-if="formData.avatar" :src="formData.avatar" alt="" class="w-24 h-24 rounded-full object-cover border-4 border-amber-200 shadow-md transition-transform group-hover:scale-105" @error="handleAvatarError" />
+            <div v-else class="w-24 h-24 rounded-full bg-amber-100 border-4 border-amber-200 shadow-md flex items-center justify-center text-amber-300">
+              <div class="i-carbon-user-avatar text-4xl"></div>
+            </div>
+          </div>
+
+          <input type="file" id="avatar-input" class="hidden" accept="image/*" @change="handleAvatarChange" :disabled="isUploadingAvatar" />
+          <label for="avatar-input" class="px-4 py-2 bg-white border border-amber-300 text-amber-800 rounded-lg cursor-pointer hover:bg-amber-50 transition-colors font-bold shadow-sm text-sm flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            {{ isDefaultAvatar ? '上传头像' : '修改头像' }}
+          </label>
         </div>
       </div>
 
       <!-- 姓名：显示 + 箭头编辑 -->
-      <div class="form-group">
-        <label class="form-label">姓名</label>
-        <div class="field-row">
-          <div class="field-value">{{ formData.name }}</div>
-          <button type="button" class="edit-arrow" @click="startEditing('name')">›</button>
-        </div>
-        <div v-if="editingField === 'name'" class="edit-input">
-          <input type="text" class="form-control" v-model="tempValue" placeholder="请输入姓名" />
-          <div class="field-actions">
-            <button type="button" class="btn-save" @click="saveEdit('name')">保存</button>
-            <button type="button" class="btn-cancel" @click="cancelEdit()">取消</button>
+      <div class="flex items-center py-6 border-b border-amber-200/50 relative z-10">
+        <label class="w-24 font-bold text-amber-900">姓名</label>
+        <div class="flex-1">
+          <div class="flex items-center justify-between group cursor-pointer" @click="startEditing('name')" v-if="editingField !== 'name'">
+            <div class="text-amber-900 font-medium text-lg">{{ formData.name }}</div>
+            <button type="button" class="text-amber-400 group-hover:text-amber-600 transition-colors p-2 hover:bg-amber-50 rounded-full border-none ring-0 outline-none">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+              </svg>
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-3 animate-fade-in">
+            <input type="text" class="flex-1 px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none bg-white/80 text-amber-900" v-model="tempValue" placeholder="请输入姓名" />
+            <div class="flex gap-2">
+              <button type="button" class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center border-none ring-0 outline-none" @click="saveEdit('name')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              </button>
+              <button type="button" class="px-3 py-2 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center border-none ring-0 outline-none" @click="cancelEdit()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- 性别 -->
-      <div class="form-group">
-        <label class="form-label">性别</label>
-        <div class="field-row">
-          <div class="field-value">{{ formData.gender }}</div>
-          <button type="button" class="edit-arrow" @click="startEditing('gender')">›</button>
-        </div>
-        <div v-if="editingField === 'gender'" class="edit-input">
-          <select class="form-control" v-model="tempValue">
-            <option value="">请选择性别</option>
-            <option value="男">男</option>
-            <option value="女">女</option>
-            <option value="其他">其他</option>
-          </select>
-          <div class="field-actions">
-            <button type="button" class="btn-save" @click="saveEdit('gender')">保存</button>
-            <button type="button" class="btn-cancel" @click="cancelEdit()">取消</button>
+      <div class="flex items-center py-6 border-b border-amber-200/50 relative z-10">
+        <label class="w-24 font-bold text-amber-900">性别</label>
+        <div class="flex-1">
+          <div class="flex items-center justify-between group cursor-pointer" @click="startEditing('gender')" v-if="editingField !== 'gender'">
+            <div class="text-amber-900 font-medium text-lg">{{ formData.gender }}</div>
+            <button type="button" class="text-amber-400 group-hover:text-amber-600 transition-colors p-2 hover:bg-amber-50 rounded-full border-none ring-0 outline-none">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+              </svg>
+            </button>
+          </div>
+          <div v-else class="flex items-center gap-3 animate-fade-in">
+            <select class="flex-1 px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none bg-white/80 text-amber-900" v-model="tempValue">
+              <option value="">请选择性别</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+              <option value="其他">其他</option>
+            </select>
+            <div class="flex gap-2">
+              <button type="button" class="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center border-none ring-0 outline-none" @click="saveEdit('gender')">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              </button>
+              <button type="button" class="px-3 py-2 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center border-none ring-0 outline-none" @click="cancelEdit()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- 邮箱 -->
-      <div class="form-group">
-        <label class="form-label">邮箱</label>
-        <div class="field-row">
-          <div class="field-value">{{ formData.email }}</div>
-          <button type="button" class="edit-arrow" @click="startEditing('email')">›</button>
-        </div>
-        <div v-if="editingField === 'email'" class="edit-input">
-          <input type="email" class="form-control" v-model="newEmail" placeholder="请输入邮箱" />
-          <div class="field-actions">
-            <button type="button" class="btn-save" :disabled="isSendingCode" @click="sendCode">
-              <span v-if="!isSendingCode">发送验证码</span>
-              <span v-else>{{ sendCountdown > 0 ? sendCountdown + 's' : '发送中...' }}</span>
+      <div class="flex items-center py-6 border-b border-amber-200/50 relative z-10">
+        <label class="w-24 font-bold text-amber-900">邮箱</label>
+        <div class="flex-1">
+          <div class="flex items-center justify-between group cursor-pointer" @click="startEditing('email')" v-if="editingField !== 'email'">
+            <div class="text-amber-900 font-medium text-lg">{{ formData.email }}</div>
+            <button type="button" class="text-amber-400 group-hover:text-amber-600 transition-colors p-2 hover:bg-amber-50 rounded-full border-none ring-0 outline-none">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+              </svg>
             </button>
-            <button type="button" class="btn-cancel" @click="cancelEdit()">取消</button>
+          </div>
+          <div v-else class="flex items-center gap-3 animate-fade-in">
+            <input type="email" class="flex-1 px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none bg-white/80 text-amber-900" v-model="newEmail" placeholder="请输入邮箱" />
+            <div class="flex gap-2">
+              <button type="button" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm text-sm font-bold whitespace-nowrap border-none ring-0 outline-none" :disabled="isSendingCode" @click="sendCode">
+                <span v-if="!isSendingCode">发送验证码</span>
+                <span v-else>{{ sendCountdown > 0 ? sendCountdown + 's' : '发送中...' }}</span>
+              </button>
+              <button type="button" class="px-3 py-2 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center border-none ring-0 outline-none" @click="cancelEdit()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-    <div v-if="showEmailVerifyModal" class="modal-overlay">
-      <div class="modal-box">
-        <p class="modal-text">请输入收到的验证码，已发送到：{{ newEmail }}</p>
-        <input type="text" class="form-control" v-model="verifyCodeInput" placeholder="请输入验证码" />
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="closeVerifyModal">取消</button>
-          <button class="btn btn-danger" :disabled="isVerifying" @click="confirmVerify">
+    <div v-if="showEmailVerifyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#fdf6e3] p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <h3 class="text-xl font-black text-amber-900 mb-4">验证邮箱</h3>
+        <p class="text-amber-800/70 mb-4 text-sm">请输入收到的验证码，已发送到：<br/><span class="font-bold text-amber-900">{{ newEmail }}</span></p>
+        <input type="text" class="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none bg-white text-amber-900 text-center tracking-widest text-lg font-bold mb-6" v-model="verifyCodeInput" placeholder="验证码" />
+        <div class="flex gap-3 justify-center">
+          <button class="px-6 py-2 rounded-lg border-2 border-amber-200 text-amber-800 hover:bg-amber-100 font-bold transition-colors" @click="closeVerifyModal">取消</button>
+          <button class="px-6 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-bold shadow-md" :disabled="isVerifying" @click="confirmVerify">
             <span v-if="!isVerifying">确认</span>
             <span v-else>验证中...</span>
           </button>
         </div>
-        <p v-if="verifyError" style="color:#d9534f;margin-top:8px">{{ verifyError }}</p>
+        <p v-if="verifyError" class="text-red-600 mt-4 text-sm font-medium">{{ verifyError }}</p>
       </div>
     </div>
 
-    <div v-if="showEmailError" class="modal-overlay">
-      <div class="modal-box">
-        <p class="modal-text">{{ emailErrorMsg }}</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="showEmailError = false">确定</button>
+    <div v-if="showEmailError" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#fdf6e3] p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <div class="text-amber-600 text-4xl mb-4 flex justify-center"><div class="i-carbon-warning-alt"></div></div>
+        <p class="text-amber-900 font-bold mb-6">{{ emailErrorMsg }}</p>
+        <div class="flex justify-center">
+          <button class="px-6 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-bold shadow-md" @click="showEmailError = false">确定</button>
         </div>
       </div>
     </div>
 
       <!-- 经验值（只读，不可编辑） -->
-      <div class="form-group">
-        <label class="form-label">经验值</label>
-        <div class="field-row">
-          <div class="field-value">{{ formData.exp }}</div>
-        </div>
+      <div class="flex items-center py-6 border-b border-amber-200/50">
+        <label class="w-24 font-bold text-amber-900">经验值</label>
+        <div class="flex-1 text-amber-900 font-medium text-lg">{{ formData.exp }}</div>
       </div>
 
       <!-- 总场次（只读，不可编辑） -->
-      <div class="form-group">
-        <label class="form-label">总场次</label>
-        <div class="field-row">
-          <div class="field-value">{{ formData.totalGames }}</div>
-        </div>
+      <div class="flex items-center py-6 border-b border-amber-200/50">
+        <label class="w-24 font-bold text-amber-900">总场次</label>
+        <div class="flex-1 text-amber-900 font-medium text-lg">{{ formData.totalGames }}</div>
       </div>
 
       <!-- 胜率（只读，不可编辑） -->
-      <div class="form-group">
-        <label class="form-label">胜率</label>
-        <div class="field-row">
-          <div class="field-value">{{ (formData.winRate || 0).toFixed(2) }}%</div>
-        </div>
+      <div class="flex items-center py-6 border-b border-amber-200/50">
+        <label class="w-24 font-bold text-amber-900">胜率</label>
+        <div class="flex-1 text-amber-900 font-medium text-lg">{{ (formData.winRate || 0).toFixed(2) }}%</div>
       </div>
 
-      <div class="form-actions">
-           <button type="button" class="btn btn-secondary" @click="openChangePwd">修改密码</button>
-           <button type="button" class="btn btn-secondary" @click="promptLogout">退出登录</button>
-        <button type="button" class="btn btn-danger" @click="deleteAccount" :disabled="isProcessing">
+      <div class="flex justify-center gap-4 mt-10">
+           <button type="button" class="px-6 py-2.5 bg-white border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-50 transition-colors font-bold shadow-sm" @click="openChangePwd">修改密码</button>
+           <button type="button" class="px-6 py-2.5 bg-white border border-amber-300 text-amber-800 rounded-lg hover:bg-amber-50 transition-colors font-bold shadow-sm" @click="promptLogout">退出登录</button>
+        <button type="button" class="px-6 py-2.5 bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-bold shadow-sm" @click="deleteAccount" :disabled="isProcessing">
           <span v-if="!isProcessing">注销账号</span>
           <span v-else>处理中...</span>
         </button>
@@ -141,31 +193,35 @@
     </form>
 
     <!-- 页面内退出确认弹窗 -->
-      <div v-if="showLogoutConfirm" class="modal-overlay">
-       <div class="modal-box">
-          <p class="modal-text">确定要退出登录吗？</p>
-          <div class="modal-actions">
-            <button class="btn btn-secondary" @click="cancelLogout">取消</button>
-            <button class="btn btn-danger" @click="logout">确定</button>
+      <div v-if="showLogoutConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+       <div class="bg-[#fdf6e3] p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+          <h3 class="text-xl font-black text-amber-900 mb-4">退出登录</h3>
+          <p class="text-amber-800/80 mb-6 font-medium">确定要退出登录吗？</p>
+          <div class="flex justify-center gap-3">
+            <button class="px-6 py-2 rounded-lg border-2 border-amber-200 text-amber-800 hover:bg-amber-100 font-bold transition-colors" @click="cancelLogout">取消</button>
+            <button class="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-bold shadow-md" @click="logout">确定</button>
          </div>
         </div>
       </div>
     <!-- 保存成功提示弹窗 -->
-      <div v-if="showSaveSuccess" class="modal-overlay">
-      <div class="modal-box">
-        <p class="modal-text">保存成功</p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="closeSaveModal">确定</button>
+      <div v-if="showSaveSuccess" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#fdf6e3] p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <div class="text-emerald-600 text-4xl mb-4 flex justify-center"><div class="i-carbon-checkmark-outline"></div></div>
+        <p class="text-amber-900 font-bold mb-6 text-lg">保存成功</p>
+        <div class="flex justify-center">
+          <button class="px-6 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-bold shadow-md" @click="closeSaveModal">确定</button>
         </div>
       </div>
     </div>
 
-      <div v-if="showDeleteConfirm" class="modal-overlay">
-      <div class="modal-box">
-        <p class="modal-text">确定要注销账号吗？注销后所有个人数据将被删除，且无法恢复！</p>
-        <div class="modal-actions">
-          <button button class="btn btn-secondary" @click="showDeleteConfirm = false">取消</button>
-          <button class="btn btn-danger" @click="confirmDeleteAccount" :disabled="isProcessing">
+      <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#fdf6e3] p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <div class="text-red-600 text-4xl mb-4 flex justify-center"><div class="i-carbon-warning"></div></div>
+        <h3 class="text-xl font-black text-amber-900 mb-4">注销账号</h3>
+        <p class="text-amber-800/80 mb-6 font-medium text-sm">确定要注销账号吗？注销后所有个人数据将被删除，且无法恢复！</p>
+        <div class="flex justify-center gap-3">
+          <button class="px-6 py-2 rounded-lg border-2 border-amber-200 text-amber-800 hover:bg-amber-100 font-bold transition-colors" @click="showDeleteConfirm = false">取消</button>
+          <button class="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-bold shadow-md" @click="confirmDeleteAccount" :disabled="isProcessing">
             <span v-if="!isProcessing">确定</span>
             <span v-else>处理中...</span>
           </button>
@@ -174,23 +230,27 @@
     </div>
 
     <!-- 修改密码弹窗 -->
-    <div v-if="showChangePwdModal" class="modal-overlay">
-      <div class="modal-box">
-        <p class="modal-text" v-if="changePwdStep === 'old'">请输入原密码</p>
-        <p class="modal-text" v-else>请输入新密码</p>
-        <input v-if="changePwdStep === 'old'" type="password" class="form-control" v-model="oldPassword" placeholder="请输入原密码" />
-        <input v-else type="password" class="form-control" v-model="newPassword" placeholder="请输入新密码" />
-        <p v-if="changePwdStep === 'new'" style="margin-top:8px;color:#666;font-size:13px">
+    <div v-if="showChangePwdModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-[#fdf6e3] p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <h3 class="text-xl font-black text-amber-900 mb-4">修改密码</h3>
+        <p class="text-amber-800/70 mb-4 font-medium" v-if="changePwdStep === 'old'">请输入原密码</p>
+        <p class="text-amber-800/70 mb-4 font-medium" v-else>请输入新密码</p>
+
+        <input v-if="changePwdStep === 'old'" type="password" class="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none bg-white text-amber-900 mb-4" v-model="oldPassword" placeholder="请输入原密码" />
+        <input v-else type="password" class="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none bg-white text-amber-900 mb-2" v-model="newPassword" placeholder="请输入新密码" />
+
+        <p v-if="changePwdStep === 'new'" class="text-xs text-amber-800/50 mb-4 text-left">
           密码至少6位，且包含大小写字母、数字和 !@#$%^&*? 中的一个。
         </p>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="cancelChangePwd">取消</button>
-          <button class="btn btn-danger" :disabled="isChangingPwd" @click="confirmChangePwd">
+
+        <div class="flex justify-center gap-3">
+          <button class="px-6 py-2 rounded-lg border-2 border-amber-200 text-amber-800 hover:bg-amber-100 font-bold transition-colors" @click="cancelChangePwd">取消</button>
+          <button class="px-6 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-bold shadow-md" :disabled="isChangingPwd" @click="confirmChangePwd">
             <span v-if="!isChangingPwd">确定</span>
             <span v-else>处理中...</span>
           </button>
         </div>
-        <p v-if="changePwdError" style="color:#d9534f;margin-top:8px">{{ changePwdError }}</p>
+        <p v-if="changePwdError" class="text-red-600 mt-4 text-sm font-medium">{{ changePwdError }}</p>
       </div>
     </div>
   </div>
@@ -200,7 +260,7 @@
 import { ref, onMounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/store/useStore';
-import RequestHandler, { API_URL } from '@/api/useRequest'; 
+import RequestHandler, { API_URL } from '@/api/useRequest';
 import { getProfile } from '@/api/user/getProfile';
 import { updateProfile } from '@/api/user/updateProfile';
 import { sendCode as sendEmailCode } from '@/api/user/send_code'
@@ -697,187 +757,4 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-.profile-container {
-  max-width: 800px;
-  margin: 20px auto;
-  padding: 30px;
-  background-color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
 
-/* 加载和错误状态 */
-.loading, .error {
-  text-align: center;
-  padding: 50px 0;
-  color: #666;
-}
-.spinner {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto 20px;
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #666;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.error button {
-  margin-top: 20px;
-  padding: 10px 20px;
-  background-color: #666;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-/* 表单样式 */
-.profile-form {
-  width: 80%;
-  margin: 0 auto;
-}
-.form-group {
-  margin-bottom: 25px;
-  position: relative; /* 用于胜率百分比提示的定位 */
-}
-.form-label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #555;
-}
-.form-control {
-  width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 16px;
-  transition: border-color 0.3s ease;
-}
-.form-control:focus {
-  outline: none;
-  border-color: #666;
-  box-shadow: 0 0 0 2px rgba(102, 102, 102, 0.2);
-}
-
-/* 编辑行样式 */
-.field-row { display:flex; align-items:center; gap:12px; }
-.field-value { flex:1; color:#333; padding:8px 0; }
-.edit-arrow {
-  background:none;
-  border:none;
-  font-size:20px;
-  cursor:pointer;
-  color:#888;
-  padding:6px 10px;
-  border-radius:4px;
-}
-.edit-input { margin-top:10px; display:flex; align-items:center; gap:10px; }
-.field-actions { display:flex; gap:8px; margin-left:auto; }
-.btn-save { background:#28a745;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer; }
-.btn-cancel { background:#ccc;color:#333;border:none;padding:6px 10px;border-radius:4px;cursor:pointer; }
-
-/* 头像相关 */
-.avatar-upload {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.avatar-img {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #eee;
-}
-/* 未上传头像时显示的空白占位（可自定义样式或保持透明） */
-.avatar-empty {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: transparent;
-  border: 2px dashed #f0f0f0;
-}
-.avatar-input {
-  display: none; /* 隐藏原生文件输入框 */
-}
-.upload-btn {
-  padding: 8px 16px;
-  background-color: #f0f0f0;
-  color: #333;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-.upload-btn:hover {
-  background-color: #e0e0e0;
-}
-
-/* 表单操作按钮 */
-.form-actions {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  margin-top: 40px;
-}
-.btn {
-  padding: 12px 30px;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: none;
-  font-size: 16px;
-}
-.btn-secondary {
-  background-color: #f0f0f0;
-  color: #333;
-}
-.btn-secondary:hover {
-  background-color: #e0e0e0;
-}
-.btn-danger {
-  background-color: #ff4d4f;
-  color: #fff;
-}
-.btn-danger:hover {
-  background-color: #d9363e;
-}
-.btn-danger:disabled {
-  background-color: #ffb4b4;
-  cursor: not-allowed;
-}
-.modal-overlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.modal-box{
-  width: 320px;
-  background: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-  text-align: center;
-}
-.modal-text{
-  margin-bottom: 16px;
-  color: #333;
-  font-size: 16px;
-}
-.modal-actions{
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-.edit-input input.form-control { max-width: 420px; }
-.modal-box input.form-control { margin: 8px 0 0; }
-</style>
