@@ -530,10 +530,10 @@ onMounted(() => {
   if (isRestoringState) {
     const restoreMoves = (savedBoardState?.moveHistoryList && savedBoardState.moveHistoryList.length > 0)
       ? savedBoardState.moveHistoryList
-      : validMoveHistory.value.map(move => ({
+      : validMoveHistory.value.map((move, index) => ({
           from: move.from,
           to: move.to,
-          currentRole: 'self' as const,
+          currentRole: (index % 2 === 0 ? 'self' : 'enemy') as const,
           pieceName: move.pieceName,
           pieceColor: move.pieceColor,
         }))
@@ -545,6 +545,7 @@ onMounted(() => {
         selfColor: playerColor.value,
         moveHistory: restoreMoves,
         currentRole: savedBoardState?.currentRole || 'self',
+        mode: 'ai',
       })
       console.log('棋盘状态已恢复，chessBoard.stepsNum =', chessBoard.stepsNum)
     }

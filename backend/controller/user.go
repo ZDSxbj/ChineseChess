@@ -12,6 +12,7 @@ import (
 
 	"chinese-chess-backend/database"
 	"chinese-chess-backend/dto"
+	endgameDto "chinese-chess-backend/dto/endgame"
 	"chinese-chess-backend/dto/user"
 	recordModel "chinese-chess-backend/model/record"
 	userModel "chinese-chess-backend/model/user"
@@ -113,18 +114,13 @@ func (uc *UserController) EndgameGetProgress(c *gin.Context) {
 		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
 		return
 	}
-	var req user.EndgameGetProgressRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		dto.ErrorResponse(c, dto.WithMessage("参数错误"))
-		return
-	}
 	svc := service.NewEndgameService()
-	attempts, best, err := svc.GetProgress(userID, req.ScenarioID)
+	resp, err := svc.GetProgress(&endgameDto.GetEndgameProgressRequest{UserID: userID})
 	if err != nil {
 		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
 		return
 	}
-	dto.SuccessResponse(c, dto.WithData(user.EndgameGetProgressResponse{EndgameProgressData: user.EndgameProgressData{Attempts: attempts, BestSteps: best}}))
+	dto.SuccessResponse(c, dto.WithData(resp))
 }
 
 // EndgameRecordProgress 记录一局完成（胜/负）并更新尝试次数与最小步数
@@ -134,18 +130,18 @@ func (uc *UserController) EndgameRecordProgress(c *gin.Context) {
 		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
 		return
 	}
-	var req user.EndgameRecordProgressRequest
+	var req endgameDto.SaveEndgameProgressRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		dto.ErrorResponse(c, dto.WithMessage("参数错误"))
 		return
 	}
 	svc := service.NewEndgameService()
-	attempts, best, err := svc.Record(userID, req.ScenarioID, req.Result, req.Steps)
+	err := svc.SaveProgress(userID, &req)
 	if err != nil {
 		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
 		return
 	}
-	dto.SuccessResponse(c, dto.WithData(user.EndgameRecordProgressResponse{EndgameProgressData: user.EndgameProgressData{Attempts: attempts, BestSteps: best}}))
+	dto.SuccessResponse(c, dto.WithMessage("进度已保存"))
 }
 
 // EndgameComplete 残局挑战结算：

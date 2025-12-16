@@ -742,11 +742,9 @@ class ChessBoard {
 
     // 默认：普通/联机/AI 对局的恢复
     // 恢复基础配置（覆盖初始设置）
-    this.start(savedState.selfColor, savedState.isNetPlay)
-
-    // 恢复历史记录和当前回合
-    this.moveHistory = savedState.moveHistory // 注意：这里直接赋值私有属性，或通过setter
-    this.currentRole = savedState.currentRole
+    // 对于 AI 模式，需要传入 isAI=true 来确保 isAIPlay 标志被正确设置
+    const isAI = savedState.mode === 'ai'
+    this.start(savedState.selfColor, savedState.isNetPlay, isAI)
 
     // 重新应用历史记录到棋盘
     this.clear() // 清空当前棋盘
@@ -756,11 +754,6 @@ class ChessBoard {
     // 遍历历史步骤，还原每一步移动
     savedState.moveHistory.forEach((step) => {
       const piece = this.board[step.from.x][step.from.y]
-      if (piece) {
-        piece.move(step.to)
-        delete this.board[step.from.x][step.from.y]
-        this.board[step.to.x][step.to.y] = piece
-      }
       if (!piece) return
 
       // 记录移动前目标位置的棋子，供悔棋时复原
