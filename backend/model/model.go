@@ -4,7 +4,7 @@ import (
 	"gorm.io/gorm"
 
 	"chinese-chess-backend/model/chat"
-	egp "chinese-chess-backend/model/endgame_progress"
+	"chinese-chess-backend/model/endgame"
 	"chinese-chess-backend/model/friend"
 	challenge "chinese-chess-backend/model/friend_challenge"
 	friendrequest "chinese-chess-backend/model/friend_request"
@@ -21,7 +21,7 @@ func InitTable(db *gorm.DB) error {
 		&chat.ChatMessage{},
 		&friendrequest.FriendRequest{},
 		&challenge.FriendChallenge{},
-		&egp.EndgameProgress{},
+		&endgame.EndgameProgress{},
 	)
 	if err != nil {
 		return err

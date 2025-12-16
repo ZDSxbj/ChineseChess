@@ -10,9 +10,8 @@ import { showMsg } from '@/components/MessageBox'
 import GameEndModal from '@/components/GameEndModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useUserStore } from '@/store/useStore'
-import { getProfile } from '@/api/user/getProfile'
-import { reportEndgameComplete } from '@/api/user/endgame'
-import { getEndgameProgress, recordEndgameProgress } from '@/api/user/endgameProgress'
+import { getGameState, clearGameState } from '@/store/gameStore'
+import { getEndgameProgress, saveEndgameProgress } from '@/api/endgame/progress'
 
 declare const window: any
 
@@ -43,7 +42,10 @@ const moveStack = ref<Array<'red' | 'black'>>([])
 const moveHistory = ref<Array<{ from: any; to: any; pieceName?: string; pieceColor?: string }>>([])
 const progressSaved = ref(false)
 
-// 统一从后端读取与写入，移除本地缓存
+const getProgressKey = () => {
+  const userId = userStore.userInfo?.id || 'guest'
+  return `endgame-progress-${userId}`
+}
 interface ScenarioProgress {
   result?: 'win' | 'lose'
   attempts: number
@@ -66,29 +68,82 @@ const aiLabel = computed(() => {
   return '困难'
 })
 
-async function loadProgress() {
-  // 强制使用服务端：按关卡读取，失败不回退本地，提示用户
-  const id = (route.query.id as string) || scenarioId.value
-  if (!id) return
-  try {
-    const data: any = await getEndgameProgress(id)
-    const best = (data && typeof data === 'object' && 'bestSteps' in data) ? (data as any).bestSteps : null
-    const attempts = (data && typeof data === 'object' && 'attempts' in data) ? (data as any).attempts : 0
-    progress.value[id] = { attempts, bestSteps: best ?? undefined, result: (best != null ? 'win' : progress.value[id]?.result) }
-  } catch (e) {
-    showMsg('进度服务暂不可用，请稍后重试')
+function loadProgress() {
+  // 优先从后端获取进度，保证多设备同步；失败时回退到本地 localStorage
+  const userId = userStore.userInfo?.id
+  if (!userId) {
+    // 未登录用户直接走本地缓存
+    try {
+      const raw = localStorage.getItem(getProgressKey())
+      if (!raw) return
+      progress.value = JSON.parse(raw)
+    } catch (e) {
+      console.warn('读取残局进度失败', e)
+    }
+    return
   }
+
+  getEndgameProgress()
+    .then((resp: any) => {
+      const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+      if (!data || !Array.isArray(data.progress)) return
+      const map: Record<string, ScenarioProgress> = {}
+      data.progress.forEach((item: any) => {
+        const id = String(item.scenario_id)
+        const attempts = Number(item.attempts) || 0
+        const bestSteps = typeof item.best_steps === 'number' ? item.best_steps : undefined
+        const lastResult = item.last_result === 'win' || item.last_result === 'lose' ? item.last_result : undefined
+        map[id] = {
+          attempts,
+          bestSteps,
+          result: lastResult,
+        }
+      })
+      progress.value = map
+      // 同步一份到本地缓存，做离线降级
+      try {
+        localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
+      } catch {}
+    })
+    .catch((e: any) => {
+      console.warn('从后端获取残局进度失败，回退到本地缓存', e)
+      try {
+        const raw = localStorage.getItem(getProgressKey())
+        if (!raw) return
+        progress.value = JSON.parse(raw)
+      } catch (err) {
+        console.warn('读取本地残局进度失败', err)
+      }
+    })
 }
 
-async function saveProgress(id: string, result: 'win' | 'lose', steps?: number) {
-  // 仅服务端持久化，确保跨浏览器统一；失败提示用户
+function saveProgress(id: string, result: 'win' | 'lose', steps?: number) {
+  const existing = progress.value[id] || { attempts: 0 }
+  const newProgress: ScenarioProgress = {
+    result,
+    attempts: existing.attempts + 1,
+    bestSteps: existing.bestSteps,
+  }
+  if (result === 'win' && steps !== undefined) {
+    if (!newProgress.bestSteps || steps < newProgress.bestSteps) {
+      newProgress.bestSteps = steps
+    }
+  }
+  progress.value[id] = newProgress
+  // 先更新本地缓存，保证界面即时一致
   try {
-    const data: any = await recordEndgameProgress(id, result, steps)
-    const best = (data && typeof data === 'object' && 'bestSteps' in data) ? (data as any).bestSteps : null
-    const attempts = (data && typeof data === 'object' && 'attempts' in data) ? (data as any).attempts : (progress.value[id]?.attempts || 0) + 1
-    progress.value[id] = { attempts, bestSteps: best ?? undefined, result }
+    localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
   } catch (e) {
-    showMsg('保存进度失败，请检查网络或稍后重试')
+    console.warn('保存本地残局进度失败', e)
+  }
+
+  // 若已登录，则同步到后端，保证不同浏览器/设备一致
+  const userId = userStore.userInfo?.id
+  if (userId) {
+    saveEndgameProgress({ scenarioId: id, result, steps })
+      .catch((e: any) => {
+        console.warn('同步残局进度到后端失败，将使用本地缓存为准', e)
+      })
   }
 }
 
@@ -218,6 +273,8 @@ function handleWin() {
     saveProgress(activeScenario.value?.id || '', 'win', totalSteps)
     progressSaved.value = true
   }
+  // 对局已结束，清除残局对局的临时局面，防止刷新后继续在结束局面上走棋
+  clearGameState()
   chessBoard?.disableInteraction()
   endMessage.value = '挑战成功！'
   showMsg('挑战成功！')
@@ -290,6 +347,8 @@ function handleLose(reason?: string) {
     saveProgress(activeScenario.value?.id || '', 'lose')
     progressSaved.value = true
   }
+  // 失败同样清除局面缓存，刷新后重新开局
+  clearGameState()
 }
 
 function requestAIMove() {
@@ -418,11 +477,15 @@ function exitChallenge() {
     exitConfirmVisible.value = true
     return
   }
+  // 主动退出残局时清除局面缓存
+  clearGameState()
   router.push('/endgame')
 }
 
 function confirmExit() {
   exitConfirmVisible.value = false
+  // 中途主动确认退出当前残局，对局局面不再保留，刷新或重进时从初始布局开始
+  clearGameState()
   router.push('/endgame')
 }
 
@@ -438,7 +501,39 @@ onMounted(() => {
   }
   initBoard()
   bindEvents()
-  startScenario()
+  // 尝试从会话中恢复残局局面
+  const saved = getGameState()
+  if (saved && saved.mode === 'endgame' && saved.moveHistory && saved.moveHistory.length > 0) {
+    try {
+      chessBoard?.restoreState(saved as any)
+      status.value = 'playing'
+      // 基于保存的历史恢复本页统计信息
+      moveHistory.value = saved.moveHistory.map((step: any) => ({
+        from: step.from,
+        to: step.to,
+        pieceName: step.pieceName,
+        pieceColor: step.pieceColor,
+      }))
+      moveStack.value = []
+      redMovesUsed.value = 0
+      saved.moveHistory.forEach((step: any) => {
+        if (step.pieceColor === 'red' || step.pieceColor === 'black') {
+          moveStack.value.push(step.pieceColor)
+        }
+        if (step.pieceColor === 'red') {
+          redMovesUsed.value += 1
+        }
+      })
+      const last = moveHistory.value[moveHistory.value.length - 1]
+      lastMove.value = last ? formatMoveLabel(last.from, last.to, last.pieceName, last.pieceColor) : '无'
+      currentTurn.value = chessBoard && chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
+    } catch (e) {
+      console.warn('恢复残局局面失败，重新开始关卡', e)
+      startScenario()
+    }
+  } else {
+    startScenario()
+  }
 })
 
 watch(
@@ -446,8 +541,6 @@ watch(
   (id) => {
     if (typeof id === 'string' && id) {
       scenarioId.value = id
-      // 关卡变更时重新从服务端拉取进度，确保统一
-      loadProgress()
       startScenario()
     }
   },
@@ -456,6 +549,11 @@ watch(
 onUnmounted(() => {
   unbindEvents()
   chessBoard?.stop()
+  // 若当前不在进行对局（已结束或尚未开始），卸载时清理残局局面缓存，
+  // 防止之后进入其它模式（如本地对战）时误用残局存档
+  if (status.value !== 'playing') {
+    clearGameState()
+  }
 })
 </script>
 

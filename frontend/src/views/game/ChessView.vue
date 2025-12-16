@@ -261,7 +261,11 @@ onMounted(() => {
   console.log('ChessBoard started')
   // 尝试加载保存的游戏状态
   const savedState = getGameState()
-  if (savedState) {
+  // 忽略来自“残局挑战”等特殊模式的存档，防止污染本地/联机对战棋盘
+  if (savedState && savedState.mode === 'endgame') {
+    console.log('Ignored saved game state from endgame mode for ChessView')
+  }
+  else if (savedState) {
     chessBoard.restoreState(savedState)
     if (savedState.opponentInfo) {
       opponentInfo.value = savedState.opponentInfo
@@ -284,6 +288,8 @@ onMounted(() => {
 
   // 新增：保存初始游戏状态
   saveGameState({
+    // 标记为普通对战模式，覆盖可能残留的其它模式标记
+    mode: 'normal',
     isNetPlay: chessBoard.isNetworkPlay(),
     selfColor: chessBoard.SelfColor,
     moveHistory: chessBoard.moveHistoryList, // 初始为空

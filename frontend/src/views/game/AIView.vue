@@ -433,7 +433,7 @@ function requestAIMove() {
     }
 
     // 更新棋盘显示
-    // chessBoard.render() // Removed to preserve selection boxes drawn by applyAIMove
+    chessBoard.render()
 
     console.log('AI move applied on frontend from', fromPos, 'to', toPos)
 

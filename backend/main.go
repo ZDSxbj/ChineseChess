@@ -7,6 +7,7 @@ import (
 	"chinese-chess-backend/route"
 	"log"
 	"time"
+	"chinese-chess-backend/config"
 )
 
 func main() {

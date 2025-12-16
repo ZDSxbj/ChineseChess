@@ -49,6 +49,7 @@ func SetupRouter() *gin.Engine {
 	chat := controller.NewChatController(service.NewChatService())
 	room := controller.NewRoomController(service.NewRoomService())
 	fc := controller.NewFriendChallengeController()
+	endgame := controller.NewEndgameController(service.NewEndgameService())
 	// 设置路由组
 	api := r.Group("/api")
 	// 静态资源：通过 /api/uploads 访问后端本地的 ./uploads 目录
@@ -86,6 +87,10 @@ func SetupRouter() *gin.Engine {
 	// 好友挑战（用于初始化加载待处理挑战）
 	userRoute.GET("/friend-challenges", fc.ListIncoming)
 
+	// 残局挑战进度相关
+	userRoute.GET("/endgame/progress", endgame.GetProgress)
+	userRoute.POST("/endgame/progress", endgame.SaveProgress)
+
 	// 聊天相关路由
 	userRoute.GET("/friends/:relationId/messages", chat.GetMessages)
 	userRoute.POST("/friends/:relationId/messages", chat.SendMessage)
@@ -95,9 +100,6 @@ func SetupRouter() *gin.Engine {
 	userRoute.POST("/rooms", hub.GetSpareRooms, room.GetSpareRooms)
 	userRoute.GET("/game-records", user.GetGameRecords)
 	userRoute.POST("/game-records", user.SaveGameRecord)
-	// 残局进度：尝试次数与最小步数（使用包级处理函数）
-	userRoute.GET("/endgame/progress", controller.EndgameGetProgress)
-	userRoute.POST("/endgame/progress", controller.EndgameRecordProgress)
 	r.GET("/ws", hub.HandleConnection)
 	go hub.Run()
 

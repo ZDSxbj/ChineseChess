@@ -5,7 +5,7 @@ import type { ChessPosition } from '@/composables/ChessPiece'
 
 export type { ChessColor, ChessPiece, ChessRole } from '@/composables/ChessPiece'
 
-// 定义游戏状态类型（无需修改）
+// 定义游戏状态类型
 export interface GameState {
   isNetPlay: boolean
   roomId?: number // 联机房间ID
@@ -15,9 +15,21 @@ export interface GameState {
     to: ChessPosition
     capturedPiece: ChessPiece | null
     currentRole: ChessRole
+    // 新增：用于复盘与模式区分的可选字段
+    pieceName?: string
+    pieceColor?: ChessColor
   }>
   currentRole: ChessRole
   opponentInfo?: any
+  // 新增：用于区分不同模式（本地、AI、人机残局等）
+  mode?: 'normal' | 'ai' | 'endgame'
+  // 新增：残局模式下用于恢复布局的初始棋子与先手
+  endgameInitialPieces?: Array<{
+    type: string
+    color: ChessColor
+    position: ChessPosition
+  }>
+  endgameInitialTurn?: ChessColor
 }
 
 // 保存游戏状态到sessionStorage

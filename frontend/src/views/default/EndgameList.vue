@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { endgameScenarios } from '@/data/endgameData'
 import { useUserStore } from '@/store/useStore'
+import { getEndgameProgress } from '@/api/endgame/progress'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -20,6 +21,42 @@ interface ScenarioProgress {
 const progress = ref<Record<string, ScenarioProgress>>({})
 
 function loadProgress() {
+  const userId = userStore.userInfo?.id
+
+  // 已登录：优先从后端取，确保不同浏览器/设备一致
+  if (userId) {
+    getEndgameProgress()
+      .then((resp: any) => {
+        const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+        if (!data || !Array.isArray(data.progress)) return
+        const map: Record<string, ScenarioProgress> = {}
+        data.progress.forEach((item: any) => {
+          const id = String(item.scenario_id)
+          const attempts = Number(item.attempts) || 0
+          const bestSteps = typeof item.best_steps === 'number' ? item.best_steps : undefined
+          const lastResult = item.last_result === 'win' || item.last_result === 'lose' ? item.last_result : undefined
+          map[id] = { attempts, bestSteps, result: lastResult }
+        })
+        progress.value = map
+        // 同步一份到本地，用作离线缓存
+        try {
+          localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
+        } catch {}
+      })
+      .catch((e: any) => {
+        console.warn('从后端获取残局进度失败，回退到本地缓存', e)
+        try {
+          const raw = localStorage.getItem(getProgressKey())
+          if (!raw) return
+          progress.value = JSON.parse(raw)
+        } catch (err) {
+          console.warn('读取本地残局进度失败', err)
+        }
+      })
+    return
+  }
+
+  // 未登录：仅使用本地缓存
   try {
     const raw = localStorage.getItem(getProgressKey())
     if (!raw) return

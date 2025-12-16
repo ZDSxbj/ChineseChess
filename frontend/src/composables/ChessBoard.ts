@@ -191,7 +191,16 @@ class ChessBoard {
     } catch (e) {
       console.warn('BOARD:ROLE:CHANGE emit failed', e)
     }
-    saveGameState({ isNetPlay: this.isNetPlay, selfColor: this.selfColor, moveHistory: this.moveHistory, currentRole: this.currentRole })
+
+    // 合并已有状态，避免丢失模式等扩展字段
+    const prevState = getGameState()
+    saveGameState({
+      ...(prevState || {}),
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    } as GameState)
     return true
   }
 
@@ -579,12 +588,16 @@ class ChessBoard {
     } catch (e) {
       console.warn('BOARD:ROLE:CHANGE emit failed', e)
     }
+
+    // 合并已有状态，避免丢失模式等扩展字段
+    const prevState = getGameState()
     saveGameState({
+      ...(prevState || {}),
       isNetPlay: this.isNetPlay,
       selfColor: this.selfColor,
       moveHistory: this.moveHistory,
       currentRole: this.currentRole,
-    })
+    } as GameState)
 
     // 在本地模式下，切换回合后立即检查新回合方是否被将死
     // 使用 setTimeout 确保棋盘 UI 更新后再检查
@@ -622,12 +635,15 @@ class ChessBoard {
       console.warn('BOARD:ROLE:CHANGE emit failed', e)
     }
 
+    // 合并已有状态，避免丢失模式等扩展字段
+    const prevState = getGameState()
     saveGameState({
+      ...(prevState || {}),
       isNetPlay: this.isNetPlay,
       selfColor: this.selfColor,
       moveHistory: this.moveHistory,
       currentRole: this.currentRole,
-    })
+    } as GameState)
     return true
   }
 
@@ -660,12 +676,71 @@ class ChessBoard {
 
     // 确保回到玩家回合
     this.currentRole = 'self'
-    saveGameState({ isNetPlay: this.isNetPlay, selfColor: this.selfColor, moveHistory: this.moveHistory, currentRole: this.currentRole })
+
+    // 合并已有状态，避免丢失模式等扩展字段
+    const prevState = getGameState()
+    saveGameState({
+      ...(prevState || {}),
+      isNetPlay: this.isNetPlay,
+      selfColor: this.selfColor,
+      moveHistory: this.moveHistory,
+      currentRole: this.currentRole,
+    } as GameState)
     return undone
   }
 
   // 新增：恢复游戏状态的方法
   public restoreState(savedState: GameState): void {
+    // 残局模式的恢复：基于自定义布局 + 历史步数
+    if (savedState.mode === 'endgame' && savedState.endgameInitialPieces && savedState.endgameInitialTurn) {
+      this.isNetPlay = false
+      this.isAIPlay = true
+      this.isEndgameMode = true
+      this.selfColor = savedState.selfColor
+      this.currentRole = savedState.currentRole
+
+      // 重置棋盘并根据初始布局放置棋子
+      this.board = Array.from({ length: 9 }).map(() => ({})) as Board
+      this.clear()
+      this.drawBoard()
+      this.moveHistory = []
+
+      this.rebuildBoardFromPieces(
+        savedState.endgameInitialPieces.map((p) => ({
+          type: p.type as CustomPieceType,
+          color: p.color,
+          position: { x: p.position.x, y: p.position.y },
+        })),
+      )
+
+      // 重新应用历史记录到棋盘（同时重建 moveHistory，恢复被吃的棋子，供悔棋使用）
+      savedState.moveHistory.forEach((step) => {
+        const piece = this.board[step.from.x][step.from.y]
+        if (!piece) return
+
+        const capturedPiece = this.board[step.to.x][step.to.y] || null
+        this.moveHistory.push({
+          from: { ...step.from },
+          to: { ...step.to },
+          capturedPiece,
+          currentRole: (step.currentRole || 'self') as ChessRole,
+          pieceName: step.pieceName,
+          pieceColor: step.pieceColor,
+        })
+
+        piece.move(step.to)
+        delete this.board[step.from.x][step.from.y]
+        this.board[step.to.x][step.to.y] = piece
+      })
+
+      this.drawChesses()
+      this.drawBoard()
+      this.listenClick()
+      this.listenEvent()
+      return
+    }
+
+    // 默认：普通/联机/AI 对局的恢复
     // 恢复基础配置（覆盖初始设置）
     this.start(savedState.selfColor, savedState.isNetPlay)
 
@@ -676,6 +751,7 @@ class ChessBoard {
     // 重新应用历史记录到棋盘
     this.clear() // 清空当前棋盘
     this.initChesses() // 重新初始化棋子
+    this.moveHistory = []
 
     // 遍历历史步骤，还原每一步移动
     savedState.moveHistory.forEach((step) => {
@@ -685,7 +761,28 @@ class ChessBoard {
         delete this.board[step.from.x][step.from.y]
         this.board[step.to.x][step.to.y] = piece
       }
+      if (!piece) return
+
+      // 记录移动前目标位置的棋子，供悔棋时复原
+      const capturedPiece = this.board[step.to.x][step.to.y] || null
+
+      this.moveHistory.push({
+        from: { ...step.from },
+        to: { ...step.to },
+        capturedPiece,
+        currentRole: (step.currentRole || 'self') as ChessRole,
+        pieceName: step.pieceName,
+        pieceColor: step.pieceColor,
+      })
+
+      // 应用移动
+      piece.move(step.to)
+      delete this.board[step.from.x][step.from.y]
+      this.board[step.to.x][step.to.y] = piece
     })
+
+    // 恢复当前执子方
+    this.currentRole = savedState.currentRole
 
     this.drawChesses()
     this.drawBoard()
@@ -803,8 +900,20 @@ class ChessBoard {
     this.chesses.clearRect(0, 0, this.width, this.height)
 
     // 先绘制棋盘，再通过统一的绘制逻辑绘制棋子/提示/最近一步高亮
+    
+    // 绘制棋盘
     this.drawBoard()
     this.drawChesses()
+    
+    // 绘制棋子
+    for (let x = 0; x <= 8; x++) {
+      for (let y = 0; y <= 9; y++) {
+        const piece = this.board[x][y]
+        if (piece) {
+          piece.draw(this.gridSize)
+        }
+      }
+    }
   }
 
   private listenClick() {
@@ -906,18 +1015,12 @@ class ChessBoard {
     if (this.selectedPiece === piece) {
       this.selectedPiece.deselect()
       this.selectedPiece = null
-      this.hintPositions = []
-      this.drawChesses()
       return
     }
 
     this.selectedPiece?.deselect()
     this.selectedPiece = piece
     piece.select()
-    
-    this.calculateHints(piece)
-    this.drawChesses()
-
     // 选中棋子音效（仅联机时启用）
     if (this.isNetPlay) {
       this.selectAudio?.play().catch(() => {})
@@ -969,7 +1072,23 @@ class ChessBoard {
     this.drawChesses()
     this.listenClick()
     this.listenEvent()
-    saveGameState({ isNetPlay: false, selfColor: this.selfColor, moveHistory: [], currentRole: this.currentRole })
+
+    // 保存残局模式的初始布局到会话存储，供刷新后恢复
+    const prevState = getGameState()
+    saveGameState({
+      ...(prevState || {}),
+      isNetPlay: false,
+      selfColor: this.selfColor,
+      moveHistory: [],
+      currentRole: this.currentRole,
+      mode: 'endgame',
+      endgameInitialPieces: pieces.map((p) => ({
+        type: p.type,
+        color: p.color,
+        position: { x: p.position.x, y: p.position.y },
+      })),
+      endgameInitialTurn: currentTurn,
+    } as GameState)
     return { success: true }
   }
 
