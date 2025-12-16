@@ -22,6 +22,11 @@ const router = createRouter({
           component: () => import('../views/default/SocialView.vue'),
           meta: { requiresAuth: true },
         },
+        {
+          path: 'endgame',
+          name: 'endgame',
+          component: () => import('../views/default/EndgameList.vue'),
+        },
         // 个人主页路由（带登录校验）
         {
           path: 'profile',
@@ -88,6 +93,11 @@ const router = createRouter({
           path: 'ai',
           name: 'game-ai',
           component: () => import('../views/game/AIView.vue'),
+        },
+        {
+          path: 'endgame',
+          name: 'game-endgame',
+          component: () => import('../views/game/EndgameChallenge.vue'),
         },
         {
           path: 'replay',

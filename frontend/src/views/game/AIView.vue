@@ -267,8 +267,12 @@ async function saveAIGameRecord(winner: 'red' | 'black' | 'draw') {
 
     // 【问题1修复】根据有效行棋历史重新生成紧凑格式
     // 这样悔棋的步数不会被包含在最终保存的历史中
+    // 【问题2修复】在每步棋后添加颜色标记（r=红，b=黑），格式：fromXfromYtoXtoYcolor
     const finalHistory = validMoveHistory.value
-      .map(move => `${move.from.x}${move.from.y}${move.to.x}${move.to.y}`)
+      .map(move => {
+        const colorCode = move.pieceColor === 'red' ? 'r' : 'b'
+        return `${move.from.x}${move.from.y}${move.to.x}${move.to.y}${colorCode}`
+      })
       .join('')
 
     await saveGameRecord({

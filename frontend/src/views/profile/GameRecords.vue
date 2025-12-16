@@ -95,21 +95,30 @@ function enterReplay(record: GameRecordItem) {
         // not json -> fallthrough to compact string parsing
       }
 
-      // 紧凑字符串格式，例如 "6665" 表示 from:(6,6) to:(6,5)，每4个字符表示一步棋
+      // 紧凑字符串格式，支持两种：
+      // 1. 旧格式：每4个字符表示一步 "6665" 表示 from:(6,6) to:(6,5)
+      // 2. 新格式：每5个字符表示一步 "6665r" 表示红方从(6,6)走到(6,5)，最后一位是颜色标记(r/b)
       const s = raw.trim()
       const moves: any[] = []
-      // 每4个字符为一步：fromX, fromY, toX, toY
-      for (let i = 0; i + 3 < s.length; i += 4) {
+      
+      // 检测格式：如果第5个字符是r或b，则为新格式
+      const hasColorCode = s.length >= 5 && (s[4] === 'r' || s[4] === 'b')
+      const stepSize = hasColorCode ? 5 : 4
+      
+      for (let i = 0; i + 3 < s.length; i += stepSize) {
         const fromX = Number(s[i])
         const fromY = Number(s[i + 1])
         const toX = Number(s[i + 2])
         const toY = Number(s[i + 3])
+        const colorCode = hasColorCode && i + 4 < s.length ? s[i + 4] : null
+        
         if (!Number.isNaN(fromX) && !Number.isNaN(fromY) && !Number.isNaN(toX) && !Number.isNaN(toY)) {
           moves.push({
             from: { x: fromX, y: fromY },
             to: { x: toX, y: toY },
             capturedPiece: null,
             currentRole: 'self',
+            pieceColor: colorCode === 'r' ? 'red' : colorCode === 'b' ? 'black' : undefined,
           })
         }
       }
@@ -117,15 +126,10 @@ function enterReplay(record: GameRecordItem) {
     }
 
     let moveHistory = parseHistory(record.history || '')
-    // 如果后端保存的是统一的“红方视角”坐标，当查看者是黑方时，需要把坐标翻转到黑方视角
-    if (!record.is_red && moveHistory && moveHistory.length > 0) {
-      moveHistory = moveHistory.map((m: any) => ({
-        from: { x: 8 - m.from.x, y: 9 - m.from.y },
-        to: { x: 8 - m.to.x, y: 9 - m.to.y },
-        capturedPiece: m.capturedPiece || null,
-        currentRole: m.currentRole || 'self',
-      }))
-    }
+    // 注意：不需要翻转坐标！
+    // 后端保存时已经根据玩家的实际视角记录了坐标
+    // 复盘时以玩家自己的棋色为selfColor展示即可
+    // 坐标翻转会导致复盘内容与实际对局不一致
 
     // 保存游戏状态到 sessionStorage，供复盘页面使用
     // 注意：GameState.currentRole 类型是 ChessRole ('self'|'enemy')，这里使用棋色计算初始显示方向（复盘以我方颜色为 SelfColor）
