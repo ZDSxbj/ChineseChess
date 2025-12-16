@@ -163,8 +163,18 @@ function regret() {
   for (let i = 0; i < stepsToPop; i++) {
     validMoveHistory.value.pop()
   }
+
+  // 同步删除紧凑字符串历史，确保存储中的历史与实际局面一致（每步4位坐标）
+  const charsToTrim = undone * 4
+  if (charsToTrim > 0 && moveHistory.value.length >= charsToTrim) {
+    moveHistory.value = moveHistory.value.slice(0, moveHistory.value.length - charsToTrim)
+  }
   
-  showMsg(`悔了${undone}步棋`) 
+  showMsg(`悔了${undone}步棋`)
+  
+  // 【新增】悔棋后立即保存当前对局状态，确保刷新后能恢复悔棋后的状态
+  // 仿照联机对战的 saveModalState，这里调用 saveAIGameStateToSession
+  saveAIGameStateToSession()
 }
 
 function handlePopState(_event: PopStateEvent) {
@@ -205,6 +215,16 @@ function saveGameStateForReplay() {
  * 这样刷新页面时可以恢复对局
  */
 function saveAIGameStateToSession() {
+  const serializedMoves = chessBoard?.moveHistoryList
+    ? chessBoard.moveHistoryList.map((m: any) => ({
+        from: m.from,
+        to: m.to,
+        currentRole: m.currentRole,
+        pieceName: m.pieceName,
+        pieceColor: m.pieceColor,
+      }))
+    : []
+
   const state = {
     playerColor: playerColor.value,
     aiLevel: aiLevel.value,
@@ -218,7 +238,7 @@ function saveAIGameStateToSession() {
     boardState: chessBoard ? {
       stepsNum: chessBoard.stepsNum,
       currentRole: chessBoard.currentRole,
-      moveHistoryList: chessBoard.moveHistoryList,
+      moveHistoryList: serializedMoves,
     } : null,
   }
   try {
@@ -265,14 +285,10 @@ async function saveAIGameRecord(winner: 'red' | 'black' | 'draw') {
       result = 1 // 负
     }
 
-    // 【问题1修复】根据有效行棋历史重新生成紧凑格式
-    // 这样悔棋的步数不会被包含在最终保存的历史中
-    // 【问题2修复】在每步棋后添加颜色标记（r=红，b=黑），格式：fromXfromYtoXtoYcolor
+    // 仅使用有效历史，输出后端期望的紧凑格式（每步4位：fromX fromY toX toY）
+    // 悔棋被从 validMoveHistory 移除后，这里不再包含悔棋前的步数
     const finalHistory = validMoveHistory.value
-      .map(move => {
-        const colorCode = move.pieceColor === 'red' ? 'r' : 'b'
-        return `${move.from.x}${move.from.y}${move.to.x}${move.to.y}${colorCode}`
-      })
+      .map(move => `${move.from.x}${move.from.y}${move.to.x}${move.to.y}`)
       .join('')
 
     await saveGameRecord({
@@ -439,6 +455,9 @@ function requestAIMove() {
 
     chessBoard.setCurrentRole('self')
     aiThinking.value = false
+
+    // 保存最新局面，确保刷新后仍是玩家回合
+    saveAIGameStateToSession()
   } catch (error) {
     console.error('AI走棋错误:', error)
     showMsg('AI走棋出错')
@@ -460,6 +479,7 @@ onMounted(() => {
   // 【问题2修复】尝试从 sessionStorage 恢复之前的对局状态
   const savedAIGameState = sessionStorage.getItem('aiGameState')
   let isRestoringState = false
+  let savedBoardState: any = null
   
   if (savedAIGameState) {
     try {
@@ -475,6 +495,7 @@ onMounted(() => {
         validMoveHistory.value = state.validMoveHistory || []
         currentTurn.value = state.currentTurn
         lastMove.value = state.lastMove
+        savedBoardState = state.boardState || null
         isRestoringState = true
       } else {
         // 对局已结束，清除缓存
@@ -506,12 +527,31 @@ onMounted(() => {
   chessBoard.start(playerColor.value, false, true) // 第三个参数true表示AI模式
   
   // 【问题2修复】如果恢复了之前的状态，需要恢复棋盘局面
-  if (isRestoringState && validMoveHistory.value.length > 0) {
-    console.log('恢复棋盘局面，共有', validMoveHistory.value.length, '步')
-    // 重放所有有效的历史步数以恢复棋盘状态
-    validMoveHistory.value.forEach(move => {
-      chessBoard.move(move.from, move.to)
-    })
+  if (isRestoringState) {
+    const restoreMoves = (savedBoardState?.moveHistoryList && savedBoardState.moveHistoryList.length > 0)
+      ? savedBoardState.moveHistoryList
+      : validMoveHistory.value.map(move => ({
+          from: move.from,
+          to: move.to,
+          currentRole: 'self' as const,
+          pieceName: move.pieceName,
+          pieceColor: move.pieceColor,
+        }))
+
+    if (restoreMoves.length > 0) {
+      console.log('恢复棋盘局面，共有', restoreMoves.length, '步')
+      chessBoard.restoreState({
+        isNetPlay: false,
+        selfColor: playerColor.value,
+        moveHistory: restoreMoves,
+        currentRole: savedBoardState?.currentRole || 'self',
+      })
+      console.log('棋盘状态已恢复，chessBoard.stepsNum =', chessBoard.stepsNum)
+    }
+  } else {
+    // 新对局开始时，清空所有历史记录
+    moveHistory.value = ''
+    validMoveHistory.value = []
   }
   
   console.log('ChessBoard started successfully')
@@ -610,6 +650,12 @@ onMounted(() => {
     currentTurn.value = currentRole === 'self' ? '你的回合' : '对手回合'
   })
   ;(channel as any).on('BOARD:MOVE:MADE', ({ from, to, pieceName, pieceColor }: any) => {
+    // 只在游戏进行中才记录步数，避免游戏结束后刷新导致重复计数
+    if (gameOver.value) {
+      console.log('游戏已结束，忽略 BOARD:MOVE:MADE 事件')
+      return
+    }
+    
     lastMove.value = formatMoveLabel(from, to, pieceName, pieceColor)
     // 【问题1修复】维护两份历史：
     // 1. moveHistory：用于发送给后端的紧凑格式（需在悔棋时正确处理）
@@ -655,7 +701,8 @@ onMounted(() => {
   })
 
   // 如果玩家是黑方，由AI先手
-  if (playerColor.value === 'black') {
+  // 仅在新对局且尚无步数时让AI先手；恢复对局时不触发，避免刷新多走
+  if (!isRestoringState && playerColor.value === 'black' && chessBoard.stepsNum === 0) {
     setTimeout(() => {
       chessBoard.setCurrentRole('enemy')
       requestAIMove()
