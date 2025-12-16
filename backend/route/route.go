@@ -70,6 +70,10 @@ func SetupRouter() *gin.Engine {
 	userRoute.POST("/update_password", user.UpdatePassword)
 	userRoute.POST("/check_password", user.CheckPassword)
 	userRoute.POST("/delete_account", user.DeleteAccount)
+	userRoute.POST("/logout", user.Logout)
+	userRoute.POST("/heartbeat", user.Heartbeat)
+	// 残局挑战结算（一次性经验奖励）
+	userRoute.POST("/endgame/complete", user.EndgameComplete)
 	userRoute.PUT("/profile", user.UpdateUserProfile)
 	userRoute.GET("/friends", friend.GetFriends)
 	userRoute.GET("/friend-requests", friend.GetFriendRequests)
@@ -91,6 +95,9 @@ func SetupRouter() *gin.Engine {
 	userRoute.POST("/rooms", hub.GetSpareRooms, room.GetSpareRooms)
 	userRoute.GET("/game-records", user.GetGameRecords)
 	userRoute.POST("/game-records", user.SaveGameRecord)
+	// 残局进度：尝试次数与最小步数（使用包级处理函数）
+	userRoute.GET("/endgame/progress", controller.EndgameGetProgress)
+	userRoute.POST("/endgame/progress", controller.EndgameRecordProgress)
 	r.GET("/ws", hub.HandleConnection)
 	go hub.Run()
 

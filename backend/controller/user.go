@@ -61,6 +61,34 @@ func (uc *UserController) Login(c *gin.Context) {
 	dto.SuccessResponse(c, dto.WithData(resp))
 }
 
+// Logout 接口：使当前账号离线，释放登录占用
+func (uc *UserController) Logout(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+	if err := uc.userService.Logout(userID); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+	dto.SuccessResponse(c, dto.WithMessage("已退出并置为离线"))
+}
+
+// Heartbeat 接口：刷新在线心跳（置 online=true 并记录 last_active_at）
+func (uc *UserController) Heartbeat(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+	if err := uc.userService.Heartbeat(userID); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+	dto.SuccessResponse(c, dto.WithMessage("ok"))
+}
+
 func (uc *UserController) GetGameRecords(c *gin.Context) {
 	// 从 token 中获取当前登录用户ID
 	userID, exists := c.Get("userId")
@@ -76,6 +104,105 @@ func (uc *UserController) GetGameRecords(c *gin.Context) {
 		return
 	}
 	dto.SuccessResponse(c, dto.WithData(resp))
+}
+
+// EndgameGetProgress 获取当前用户某关卡的尝试次数与最小步数
+func (uc *UserController) EndgameGetProgress(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+	var req user.EndgameGetProgressRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("参数错误"))
+		return
+	}
+	svc := service.NewEndgameService()
+	attempts, best, err := svc.GetProgress(userID, req.ScenarioID)
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+	dto.SuccessResponse(c, dto.WithData(user.EndgameGetProgressResponse{EndgameProgressData: user.EndgameProgressData{Attempts: attempts, BestSteps: best}}))
+}
+
+// EndgameRecordProgress 记录一局完成（胜/负）并更新尝试次数与最小步数
+func (uc *UserController) EndgameRecordProgress(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+	var req user.EndgameRecordProgressRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("参数错误"))
+		return
+	}
+	svc := service.NewEndgameService()
+	attempts, best, err := svc.Record(userID, req.ScenarioID, req.Result, req.Steps)
+	if err != nil {
+		dto.ErrorResponse(c, dto.WithMessage(err.Error()))
+		return
+	}
+	dto.SuccessResponse(c, dto.WithData(user.EndgameRecordProgressResponse{EndgameProgressData: user.EndgameProgressData{Attempts: attempts, BestSteps: best}}))
+}
+
+// EndgameComplete 残局挑战结算：
+// - 仅在成功时根据难度发放经验（中级+50，高级+100，其它0）
+// - 同一用户同一关卡仅首次通关发放（使用Redis标记）
+func (uc *UserController) EndgameComplete(c *gin.Context) {
+	userID := c.GetInt("userId")
+	if userID == 0 {
+		dto.ErrorResponse(c, dto.WithMessage("未获取到用户信息"))
+		return
+	}
+
+	var req user.EndgameCompleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		dto.ErrorResponse(c, dto.WithMessage("参数错误"))
+		return
+	}
+
+	// 失败直接返回（不加经验）
+	if !req.Success {
+		dto.SuccessResponse(c, dto.WithData(user.EndgameCompleteResponse{Awarded: 0, AlreadyAwarded: false}))
+		return
+	}
+
+	// 仅首次通关奖励：使用 Redis 记录
+	key := fmt.Sprintf("endgame:completed:%d:%s", userID, strings.TrimSpace(req.ScenarioID))
+	if val, err := database.GetValue(key); err == nil && val == "1" {
+		dto.SuccessResponse(c, dto.WithData(user.EndgameCompleteResponse{Awarded: 0, AlreadyAwarded: true}))
+		return
+	}
+
+	// 计算奖励
+	var award int
+	switch strings.TrimSpace(req.Difficulty) {
+	case "高级":
+		award = 100
+	case "中级":
+		award = 50
+	default:
+		award = 0
+	}
+
+	if award > 0 {
+		if err := uc.userService.AddUserExp(userID, award); err != nil {
+			log.Printf("add exp failed (endgame): %v", err)
+			dto.ErrorResponse(c, dto.WithMessage("发放经验失败"))
+			return
+		}
+		// 标记已完成（永久，不设过期）
+		_ = database.SetValue(key, "1", 0)
+		dto.SuccessResponse(c, dto.WithData(user.EndgameCompleteResponse{Awarded: award, AlreadyAwarded: false}))
+		return
+	}
+
+	// award 为0（初级或未覆盖的难度）也做完成标记，但不加经验
+	_ = database.SetValue(key, "1", 0)
+	dto.SuccessResponse(c, dto.WithData(user.EndgameCompleteResponse{Awarded: 0, AlreadyAwarded: false}))
 }
 
 // SaveGameRecord 接收前端提交的对局记录并持久化（用于人机对战保存）

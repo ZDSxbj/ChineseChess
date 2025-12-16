@@ -10,6 +10,9 @@ import { showMsg } from '@/components/MessageBox'
 import GameEndModal from '@/components/GameEndModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useUserStore } from '@/store/useStore'
+import { getProfile } from '@/api/user/getProfile'
+import { reportEndgameComplete } from '@/api/user/endgame'
+import { getEndgameProgress, recordEndgameProgress } from '@/api/user/endgameProgress'
 
 declare const window: any
 
@@ -40,10 +43,7 @@ const moveStack = ref<Array<'red' | 'black'>>([])
 const moveHistory = ref<Array<{ from: any; to: any; pieceName?: string; pieceColor?: string }>>([])
 const progressSaved = ref(false)
 
-const getProgressKey = () => {
-  const userId = userStore.userInfo?.id || 'guest'
-  return `endgame-progress-${userId}`
-}
+// 统一从后端读取与写入，移除本地缓存
 interface ScenarioProgress {
   result?: 'win' | 'lose'
   attempts: number
@@ -66,33 +66,29 @@ const aiLabel = computed(() => {
   return '困难'
 })
 
-function loadProgress() {
+async function loadProgress() {
+  // 强制使用服务端：按关卡读取，失败不回退本地，提示用户
+  const id = (route.query.id as string) || scenarioId.value
+  if (!id) return
   try {
-    const raw = localStorage.getItem(getProgressKey())
-    if (!raw) return
-    progress.value = JSON.parse(raw)
+    const data: any = await getEndgameProgress(id)
+    const best = (data && typeof data === 'object' && 'bestSteps' in data) ? (data as any).bestSteps : null
+    const attempts = (data && typeof data === 'object' && 'attempts' in data) ? (data as any).attempts : 0
+    progress.value[id] = { attempts, bestSteps: best ?? undefined, result: (best != null ? 'win' : progress.value[id]?.result) }
   } catch (e) {
-    console.warn('读取残局进度失败', e)
+    showMsg('进度服务暂不可用，请稍后重试')
   }
 }
 
-function saveProgress(id: string, result: 'win' | 'lose', steps?: number) {
-  const existing = progress.value[id] || { attempts: 0 }
-  const newProgress: ScenarioProgress = {
-    result,
-    attempts: existing.attempts + 1,
-    bestSteps: existing.bestSteps,
-  }
-  if (result === 'win' && steps !== undefined) {
-    if (!newProgress.bestSteps || steps < newProgress.bestSteps) {
-      newProgress.bestSteps = steps
-    }
-  }
-  progress.value[id] = newProgress
+async function saveProgress(id: string, result: 'win' | 'lose', steps?: number) {
+  // 仅服务端持久化，确保跨浏览器统一；失败提示用户
   try {
-    localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
+    const data: any = await recordEndgameProgress(id, result, steps)
+    const best = (data && typeof data === 'object' && 'bestSteps' in data) ? (data as any).bestSteps : null
+    const attempts = (data && typeof data === 'object' && 'attempts' in data) ? (data as any).attempts : (progress.value[id]?.attempts || 0) + 1
+    progress.value[id] = { attempts, bestSteps: best ?? undefined, result }
   } catch (e) {
-    console.warn('保存残局进度失败', e)
+    showMsg('保存进度失败，请检查网络或稍后重试')
   }
 }
 
@@ -200,6 +196,24 @@ function handleWin() {
   resultState.value = 'win'
   resultModalVisible.value = true
   const totalSteps = redMovesUsed.value
+  const id = activeScenario.value?.id || ''
+  const diff = activeScenario.value?.difficulty || ''
+  const wasCompleted = id ? (progress.value?.[id]?.result === 'win') : false
+  // 首次通关经验奖励：高级+100 / 中级+50 / 其它+0（只发放一次）
+  try {
+    if (!wasCompleted && id) {
+      reportEndgameComplete({ scenarioId: id, difficulty: diff as any, success: true })
+        .then(async (resp: any) => {
+          // 刷新资料以更新经验
+          try {
+            const prof = await getProfile()
+            const d = prof && typeof prof === 'object' && 'data' in prof ? (prof as any).data : prof
+            if (d) userStore.setUser(d)
+          } catch {}
+        })
+        .catch(() => {})
+    }
+  } catch {}
   if (!progressSaved.value) {
     saveProgress(activeScenario.value?.id || '', 'win', totalSteps)
     progressSaved.value = true
@@ -432,6 +446,8 @@ watch(
   (id) => {
     if (typeof id === 'string' && id) {
       scenarioId.value = id
+      // 关卡变更时重新从服务端拉取进度，确保统一
+      loadProgress()
       startScenario()
     }
   },

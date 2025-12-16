@@ -182,6 +182,11 @@ func (us *UserService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) 
 		return nil, errors.New("用户不存在")
 	}
 
+	// 若该账号已处于在线状态，则拒绝新的登录（单账号单在线会话）
+	if user.Online {
+		return nil, errors.New("该账号已在其他设备/浏览器登录")
+	}
+
 	// 校验密码
 	if !utils.CheckPassword(user.Password, req.Password) {
 		return nil, errors.New("密码错误")
@@ -203,6 +208,16 @@ func (us *UserService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) 
 	}
 
 	return &loginResp, nil
+}
+
+// Logout 将当前用户置为离线
+func (us *UserService) Logout(userID int) error {
+	db := database.GetMysqlDb()
+	var user userModel.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	return db.Model(&user).Update("online", false).Error
 }
 
 func (us *UserService) SendVCode(req *dto.SendVCodeRequest) error {
@@ -359,6 +374,20 @@ func (us *UserService) CheckPassword(userID int, password string) error {
 		return errors.New("密码错误")
 	}
 	return nil
+}
+
+// Heartbeat 更新用户在线与最近心跳时间
+func (us *UserService) Heartbeat(userID int) error {
+	db := database.GetMysqlDb()
+	var user userModel.User
+	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return errors.New("用户不存在")
+	}
+	now := time.Now()
+	return db.Model(&user).Updates(map[string]interface{}{
+		"online":         true,
+		"last_active_at": &now,
+	}).Error
 }
 
 func (us *UserService) GetGameRecords(req *dto.GetGameRecordsRequest) (*dto.GetGameRecordsResponse, error) {

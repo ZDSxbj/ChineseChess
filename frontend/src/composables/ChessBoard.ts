@@ -801,19 +801,10 @@ class ChessBoard {
   public render(): void {
     this.background.clearRect(0, 0, this.width, this.height)
     this.chesses.clearRect(0, 0, this.width, this.height)
-    
-    // 绘制棋盘
+
+    // 先绘制棋盘，再通过统一的绘制逻辑绘制棋子/提示/最近一步高亮
     this.drawBoard()
-    
-    // 绘制棋子
-    for (let x = 0; x <= 8; x++) {
-      for (let y = 0; y <= 9; y++) {
-        const piece = this.board[x][y]
-        if (piece) {
-          piece.draw(this.gridSize)
-        }
-      }
-    }
+    this.drawChesses()
   }
 
   private listenClick() {
