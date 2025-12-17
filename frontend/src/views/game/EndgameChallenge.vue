@@ -650,24 +650,32 @@ onUnmounted(() => {
           </div>
 
           <!-- 数据展示 -->
-          <div class="flex justify-between w-full gap-2">
-            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-              <div class="flex justify-between items-center text-xs mb-1">
-                <span class="text-amber-800/60">经验</span>
-                <span class="font-bold text-amber-900">{{ userStore.userInfo?.exp || 0 }}</span>
-              </div>
-              <div class="flex justify-between items-center text-xs">
+          <div class="flex justify-between w-full gap-2 text-[10px] sm:text-xs">
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100 flex flex-col gap-1">
+              <div class="flex justify-between">
                 <span class="text-amber-800/60">胜率</span>
                 <span class="font-bold text-amber-900">{{ (userStore.userInfo?.winRate || 0).toFixed(0) }}%</span>
               </div>
+              <div class="flex justify-between">
+                <span class="text-amber-800/60">场次</span>
+                <span class="font-bold text-amber-900">{{ userStore.userInfo?.totalGames || 0 }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-amber-800/60">经验</span>
+                <span class="font-bold text-amber-900">{{ userStore.userInfo?.exp || 0 }}</span>
+              </div>
             </div>
-            <div class="flex-1 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100">
-              <div class="flex justify-between items-center text-xs mb-1">
+            <div class="flex-1 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 flex flex-col gap-1">
+              <div class="flex justify-between">
                 <span class="text-indigo-800/60">难度</span>
                 <span class="font-bold text-indigo-900">{{ aiLabel }}</span>
               </div>
-              <div class="flex justify-between items-center text-xs">
-                <span class="text-indigo-800/60">残局</span>
+              <div class="flex justify-between">
+                <span class="text-indigo-800/60">类型</span>
+                <span class="font-bold text-indigo-900">残局挑战</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-indigo-800/60">关卡</span>
                 <span class="font-bold text-indigo-900 truncate max-w-[4em]">{{ activeScenario?.name || '未知' }}</span>
               </div>
             </div>
