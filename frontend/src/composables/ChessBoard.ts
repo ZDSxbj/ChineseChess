@@ -328,7 +328,7 @@ class ChessBoard {
     // 确定当前回合应该走棋的颜色
     const enemyColor = this.selfColor === 'red' ? 'black' : 'red'
     const currentColor = this.currentRole === 'self' ? this.selfColor : enemyColor
-    
+
     // 先用本地判定
     let currentIsCheckmatedLocal = this.isCheckmate(currentColor)
     let currentIsCheckmatedEngine = false
@@ -424,7 +424,7 @@ class ChessBoard {
     }
   }
 
-  private move(from: ChessPosition, to: ChessPosition) {
+  public move(from: ChessPosition, to: ChessPosition) {
     const piece = this.board[from.x][from.y]
     const targetPiece = this.board[to.x][to.y]
     if (!piece) {
@@ -709,7 +709,7 @@ class ChessBoard {
   // 获取当前棋盘状态（用于AI计算）
   public getCurrentBoard(): any {
     const boardArray = Array.from({ length: 10 }, () => Array(9).fill(null))
-    
+
     // 根据棋子名称映射到logic.js的简称（兼容英文与中文名称）
     const nameToAbbr: Record<string, string> = {
       // 中文
@@ -729,7 +729,7 @@ class ChessBoard {
       'Cannon': 'c',
       'Pawn': 's',
     }
-    
+
     for (let x = 0; x <= 8; x++) {
       for (let y = 0; y <= 9; y++) {
         const piece = this.board[x][y]
@@ -745,7 +745,7 @@ class ChessBoard {
         }
       }
     }
-    
+
     return boardArray
   }
 
@@ -801,10 +801,10 @@ class ChessBoard {
   public render(): void {
     this.background.clearRect(0, 0, this.width, this.height)
     this.chesses.clearRect(0, 0, this.width, this.height)
-    
+
     // 绘制棋盘
     this.drawBoard()
-    
+
     // 绘制棋子
     for (let x = 0; x <= 8; x++) {
       for (let y = 0; y <= 9; y++) {
@@ -838,7 +838,7 @@ class ChessBoard {
     const from = piece.position
     const savedPiece = this.board[to.x][to.y]
     const originalPos = { ...piece.position }
-    
+
     // Temporarily move
     delete this.board[from.x][from.y]
     this.board[to.x][to.y] = piece
@@ -867,7 +867,7 @@ class ChessBoard {
         if (!piece.isMoveValid(targetPos, this.board)) {
           continue
         }
-        
+
         // Check if target is occupied by own piece
         const targetPiece = this.board[x][y]
         if (targetPiece && targetPiece.color === piece.color) {
@@ -923,7 +923,7 @@ class ChessBoard {
     this.selectedPiece?.deselect()
     this.selectedPiece = piece
     piece.select()
-    
+
     this.calculateHints(piece)
     this.drawChesses()
 
@@ -1272,7 +1272,7 @@ class ChessBoard {
     const half = gridSize / 2
     const len = gridSize / 6
     const padding = 1
-    
+
     const centerX = x * gridSize + half
     const centerY = y * gridSize + half
 
@@ -1328,7 +1328,7 @@ class ChessBoard {
 
   private drawBoard() {
     this.background.clearRect(0, 0, this.width, this.height)
-    
+
     // Set background color (Wood texture color)
     this.background.fillStyle = '#eecfa1'
     this.background.fillRect(0, 0, this.width, this.height)
@@ -1383,7 +1383,7 @@ class ChessBoard {
     this.background.fillStyle = '#5d4037'
     this.background.textAlign = 'center'
     this.background.textBaseline = 'middle'
-    
+
     // Rotate text for traditional look if desired, but simple placement first
     this.background.save()
     this.background.translate(offsetX + 2 * this.gridSize, offsetY + 4.5 * this.gridSize)

@@ -48,6 +48,7 @@ const quitConfirmVisible = ref(false)
 const moveHistory = ref<string>('')
 const gameStartTime = ref<Date>(new Date())
 let recordSaved = false // 标记是否已保存，防止重复保存
+let isReplaying = false // 标记是否正在恢复棋谱
 
 // 【问题1修复】维护有效行棋历史数组（记录每一步的完整信息）
 // 用于准确计算步数，避免悔棋时历史混乱
@@ -56,6 +57,7 @@ const validMoveHistory = ref<Array<{from: any, to: any, pieceName: string, piece
 // 当前回合与最近一步（响应式）
 const currentTurn = ref<string>('—')
 const lastMove = ref<string>('无')
+const moveCount = ref(0)
 
 function formatMoveLabel(from: any, to: any, pieceName?: string, pieceColor?: string) {
   // 简单中文记谱：例如“马二进三”
@@ -508,10 +510,13 @@ onMounted(() => {
   // 【问题2修复】如果恢复了之前的状态，需要恢复棋盘局面
   if (isRestoringState && validMoveHistory.value.length > 0) {
     console.log('恢复棋盘局面，共有', validMoveHistory.value.length, '步')
+    isReplaying = true
     // 重放所有有效的历史步数以恢复棋盘状态
     validMoveHistory.value.forEach(move => {
       chessBoard.move(move.from, move.to)
     })
+    isReplaying = false
+    moveCount.value = validMoveHistory.value.length
   }
 
   console.log('ChessBoard started successfully')
@@ -597,6 +602,7 @@ onMounted(() => {
   try {
     currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
     const mh = chessBoard.moveHistoryList || []
+    moveCount.value = mh.length
     if (mh.length > 0) {
       const last = mh[mh.length - 1]
       lastMove.value = formatMoveLabel(last.from, last.to, last.pieceName, last.pieceColor)
@@ -614,12 +620,15 @@ onMounted(() => {
     // 【问题1修复】维护两份历史：
     // 1. moveHistory：用于发送给后端的紧凑格式（需在悔棋时正确处理）
     // 2. validMoveHistory：用于计算最终的有效步数
-    moveHistory.value += `${from.x}${from.y}${to.x}${to.y}`
-    validMoveHistory.value.push({ from, to, pieceName, pieceColor })
+    if (!isReplaying) {
+      moveHistory.value += `${from.x}${from.y}${to.x}${to.y}`
+      validMoveHistory.value.push({ from, to, pieceName, pieceColor })
+      moveCount.value = validMoveHistory.value.length
 
-    // 【问题2修复】落子后立即保存当前对局状态到 sessionStorage
-    // 这样刷新页面时可以恢复对局
-    saveAIGameStateToSession()
+      // 【问题2修复】落子后立即保存当前对局状态到 sessionStorage
+      // 这样刷新页面时可以恢复对局
+      saveAIGameStateToSession()
+    }
   })
 
 
@@ -685,12 +694,12 @@ onUnmounted(() => {
     </div>
 
     <!-- 主布局容器 -->
-    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1600px] mx-auto w-full p-2 sm:p-4 gap-4 sm:gap-8">
+    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1200px] mx-auto w-full p-2 sm:p-4 gap-4 justify-center items-center">
 
       <!-- 左侧/中间：棋盘区域 -->
-      <div class="flex-1 flex flex-col items-center justify-center min-h-0">
+      <div class="flex-none flex flex-col items-center justify-center">
         <!-- 棋盘容器 -->
-        <div class="relative w-full max-w-[650px] aspect-[9/10] flex items-center justify-center">
+        <div class="relative w-[90vw] sm:w-[650px] aspect-[9/10] flex-none flex items-center justify-center">
           <!-- 棋盘背景装饰 -->
           <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
 
@@ -744,19 +753,19 @@ onUnmounted(() => {
       </div>
 
       <!-- 右侧：信息面板 -->
-      <div class="w-full sm:w-80 lg:w-96 flex flex-col gap-4 h-auto sm:h-full overflow-y-auto">
+      <div class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-3 h-auto sm:h-full overflow-y-auto">
         <!-- AI对战信息面板 -->
-        <div class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-4 border border-white/50 flex flex-col">
-          <div class="flex items-center justify-between w-full mb-4">
+        <div class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-3 border border-white/50 flex flex-col">
+          <div class="flex items-center justify-between w-full mb-3">
             <!-- 玩家 -->
             <div class="flex flex-col items-center w-1/3 group">
               <div class="relative">
-                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" alt="玩家头像" class="w-14 h-14 rounded-full mb-2 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="playerColor === 'red' ? 'border-red-500' : 'border-gray-800'" />
-                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm" :class="playerColor === 'red' ? 'bg-red-500' : 'bg-gray-800'">
+                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" alt="玩家头像" class="w-12 h-12 rounded-full mb-1 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="playerColor === 'red' ? 'border-red-500' : 'border-gray-800'" />
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :class="playerColor === 'red' ? 'bg-red-500' : 'bg-gray-800'">
                   {{ playerColor === 'red' ? '红' : '黑' }}
                 </div>
               </div>
-              <span class="text-sm truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
+              <span class="text-xs truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
             </div>
 
             <!-- VS -->
@@ -767,14 +776,14 @@ onUnmounted(() => {
             <!-- 电脑 -->
             <div class="flex flex-col items-center w-1/3 group">
               <div class="relative">
-                <div class="w-14 h-14 rounded-full mb-2 bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-2xl shadow-md border-4 border-white transition-transform group-hover:scale-105">
+                <div class="w-12 h-12 rounded-full mb-1 bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-md border-4 border-white transition-transform group-hover:scale-105">
                   🤖
                 </div>
-                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm" :class="playerColor === 'red' ? 'bg-gray-800' : 'bg-red-500'">
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :class="playerColor === 'red' ? 'bg-gray-800' : 'bg-red-500'">
                   {{ playerColor === 'red' ? '黑' : '红' }}
                 </div>
               </div>
-              <span class="text-sm truncate w-full text-center font-bold text-amber-900">电脑</span>
+              <span class="text-xs truncate w-full text-center font-bold text-amber-900">电脑 ({{ aiLabel }})</span>
             </div>
           </div>
 

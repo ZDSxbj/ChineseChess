@@ -87,20 +87,20 @@ onUnmounted(() => {
             <!-- Online Match Button -->
             <button
                 @click="onlinePlay"
-                class="group relative overflow-hidden bg-gradient-to-r from-amber-600 to-amber-700 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-3 w-full"
+                class="group relative overflow-hidden bg-gradient-to-r from-amber-600 to-amber-700 text-white py-6 px-8 rounded-xl font-bold text-xl shadow-lg hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-3 w-full"
             >
                 <span class="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M10.5 14.5l-2.5 2.5"/><path d="M13 12l2.5-2.5"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M10.5 14.5l-2.5 2.5"/><path d="M13 12l2.5-2.5"/></svg>
                 随机匹配对战
             </button>
 
             <div class="grid grid-cols-2 gap-4">
-                <button @click="singlePlay" class="bg-amber-100 text-amber-900 py-3 rounded-xl font-bold hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2 hover:shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                <button @click="singlePlay" class="bg-amber-100 text-amber-900 py-4 rounded-xl font-bold text-lg hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2 hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
                     本地对战
                 </button>
-                <button @click="aiPlay" class="bg-amber-100 text-amber-900 py-3 rounded-xl font-bold hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2 hover:shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                <button @click="aiPlay" class="bg-amber-100 text-amber-900 py-4 rounded-xl font-bold text-lg hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2 hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
                     人机对战
                 </button>
             </div>

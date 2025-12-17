@@ -208,7 +208,7 @@ function regret() {
 // 当前回合与最近一步显示（响应式）
 const currentTurn = ref<string>('—')
 const lastMove = ref<string>('无')
-
+const moveCount = ref(0)
 function formatMoveLabel(from: any, to: any, pieceName?: string, pieceColor?: string) {
   const chineseNums = ['零','一','二','三','四','五','六','七','八','九']
   const nameMap: Record<string,string> = {
@@ -296,6 +296,7 @@ onMounted(() => {
   try {
     currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
     const mh = chessBoard.moveHistoryList || []
+    moveCount.value = mh.length
     if (mh.length > 0) {
       const last = mh[mh.length - 1]
       lastMove.value = formatMoveLabel(last.from, last.to, last.pieceName, last.pieceColor)
@@ -310,6 +311,7 @@ onMounted(() => {
   })
   ;(channel as any).on('BOARD:MOVE:MADE', ({ from, to, pieceName, pieceColor }: any) => {
     lastMove.value = formatMoveLabel(from, to, pieceName, pieceColor)
+    moveCount.value = chessBoard.moveHistoryList.length
   })
   channel.on('NET:GAME:START', ({ color, opponent }) => {
     console.log('Game started, color:', color)
@@ -339,6 +341,7 @@ onMounted(() => {
     channel.clearQueue('NET:GAME:END')
     currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
     lastMove.value = '无'
+    moveCount.value = 0
 
     // 刚进入对局，主动刷新资料以更新右上角场次/胜率
     try {
@@ -534,12 +537,12 @@ onUnmounted(() => {
     </div>
 
     <!-- 主布局容器 -->
-    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1600px] mx-auto w-full p-2 sm:p-4 gap-4 sm:gap-8">
+    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1200px] mx-auto w-full p-2 sm:p-4 gap-4 justify-center items-center">
 
       <!-- 左侧/中间：棋盘区域 -->
-      <div class="flex-1 flex flex-col items-center justify-center min-h-0">
+      <div class="flex-none flex flex-col items-center justify-center">
         <!-- 棋盘容器 -->
-        <div class="relative w-full max-w-[650px] aspect-[9/10] flex items-center justify-center">
+        <div class="relative w-[90vw] sm:w-[650px] aspect-[9/10] flex-none flex items-center justify-center">
           <!-- 棋盘背景装饰 -->
           <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
 
@@ -602,75 +605,95 @@ onUnmounted(() => {
       </div>
 
       <!-- 右侧：信息面板 -->
-      <div class="w-full sm:w-80 lg:w-96 flex flex-col gap-4 h-[30vh] sm:h-full overflow-hidden">
+      <div class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-3 h-[30vh] sm:h-full overflow-hidden">
         <!-- 用户信息面板 -->
-        <div v-if="networkPlay" class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-4 border border-white/50 flex flex-col">
-          <div class="flex items-center justify-between w-full mb-4">
+        <div v-if="networkPlay" class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-3 border border-white/50 flex flex-col">
+          <div class="flex items-center justify-between w-full mb-3">
             <!-- 我方 -->
             <div class="flex flex-col items-center w-1/3 group">
               <div class="relative">
-                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" class="w-14 h-14 rounded-full mb-2 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="selfColor === 'red' ? 'border-red-500' : 'border-gray-800'" />
-                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm" :class="selfColor === 'red' ? 'bg-red-500' : 'bg-gray-800'">
+                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" class="w-12 h-12 rounded-full mb-1 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="selfColor === 'red' ? 'border-red-500' : 'border-gray-800'" />
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :class="selfColor === 'red' ? 'bg-red-500' : 'bg-gray-800'">
                   {{ selfColor === 'red' ? '红' : '黑' }}
                 </div>
               </div>
-              <span class="text-sm truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
+              <span class="text-xs truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
             </div>
 
             <!-- VS -->
             <div class="flex flex-col items-center justify-center">
-              <span class="text-3xl font-black text-amber-200/80 italic">VS</span>
+              <span class="text-2xl font-black text-amber-200/80 italic">VS</span>
             </div>
 
             <!-- 对手 -->
             <div class="flex flex-col items-center w-1/3 group">
               <div class="relative">
-                <img :src="opponentInfo?.avatar || '/images/default_avatar.png'" class="w-14 h-14 rounded-full mb-2 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="selfColor === 'red' ? 'border-gray-800' : 'border-red-500'" />
-                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm" :class="selfColor === 'red' ? 'bg-gray-800' : 'bg-red-500'">
+                <img :src="opponentInfo?.avatar || '/images/default_avatar.png'" class="w-12 h-12 rounded-full mb-1 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="selfColor === 'red' ? 'border-gray-800' : 'border-red-500'" />
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :class="selfColor === 'red' ? 'bg-gray-800' : 'bg-red-500'">
                   {{ selfColor === 'red' ? '黑' : '红' }}
                 </div>
               </div>
-              <span class="text-sm truncate w-full text-center font-bold text-amber-900">{{ opponentInfo?.name || '对手' }}</span>
+              <span class="text-xs truncate w-full text-center font-bold text-amber-900">{{ opponentInfo?.name || '对手' }}</span>
             </div>
           </div>
 
           <!-- 数据对比 -->
-          <div class="flex justify-between w-full gap-2">
-            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-              <div class="flex justify-between items-center text-xs mb-1">
+          <div class="flex justify-between w-full gap-2 text-[10px] sm:text-xs">
+            <!-- 我方数据 -->
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100 flex flex-col gap-1">
+              <div class="flex justify-between">
                 <span class="text-amber-800/60">胜率</span>
                 <span class="font-bold text-amber-900">{{ (userStore.userInfo?.winRate || 0).toFixed(0) }}%</span>
               </div>
-              <div class="w-full bg-amber-200/30 h-1.5 rounded-full overflow-hidden">
-                <div class="h-full bg-amber-500 rounded-full" :style="{ width: `${userStore.userInfo?.winRate || 0}%` }"></div>
+              <div class="flex justify-between">
+                <span class="text-amber-800/60">场次</span>
+                <span class="font-bold text-amber-900">{{ userStore.userInfo?.totalGames || 0 }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-amber-800/60">经验</span>
+                <span class="font-bold text-amber-900">{{ userStore.userInfo?.exp || 0 }}</span>
               </div>
             </div>
-            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
-              <div class="flex justify-between items-center text-xs mb-1">
+            <!-- 对手数据 -->
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100 flex flex-col gap-1">
+              <div class="flex justify-between">
                 <span class="text-amber-800/60">胜率</span>
                 <span class="font-bold text-amber-900">{{ (opponentInfo?.winRate || 0).toFixed(0) }}%</span>
               </div>
-              <div class="w-full bg-amber-200/30 h-1.5 rounded-full overflow-hidden">
-                <div class="h-full bg-gray-600 rounded-full" :style="{ width: `${opponentInfo?.winRate || 0}%` }"></div>
+              <div class="flex justify-between">
+                <span class="text-amber-800/60">场次</span>
+                <span class="font-bold text-amber-900">{{ opponentInfo?.totalGames || 0 }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-amber-800/60">经验</span>
+                <span class="font-bold text-amber-900">{{ opponentInfo?.exp || 0 }}</span>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 游戏信息 -->
-        <div v-if="networkPlay" class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-4 shadow-sm">
-          <div class="flex items-center gap-2 mb-3">
-            <div class="w-1 h-4 bg-amber-500 rounded-full"></div>
-            <span class="text-sm font-bold text-amber-900">对局信息</span>
+        <div v-if="networkPlay" class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-3 shadow-sm">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1 h-3 bg-amber-500 rounded-full"></div>
+            <span class="text-xs font-bold text-amber-900">对局信息</span>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
-              <span class="text-xs text-amber-800/60 mb-1">当前回合</span>
-              <span class="font-bold text-amber-900 text-lg">{{ currentTurn }}</span>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-amber-50 rounded-xl p-2 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-[10px] text-amber-800/60 mb-0.5">当前回合</span>
+              <span class="font-bold text-amber-900 text-sm">{{ currentTurn }}</span>
             </div>
-            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
-              <span class="text-xs text-amber-800/60 mb-1">最近落子</span>
-              <span class="font-mono font-bold text-amber-900 text-lg">{{ lastMove }}</span>
+            <div class="bg-amber-50 rounded-xl p-2 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-[10px] text-amber-800/60 mb-0.5">最近落子</span>
+              <span class="font-mono font-bold text-amber-900 text-sm">{{ lastMove }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-2 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-[10px] text-amber-800/60 mb-0.5">已走步数</span>
+              <span class="font-bold text-amber-900 text-sm">{{ moveCount }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-2 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-[10px] text-amber-800/60 mb-0.5">游戏模式</span>
+              <span class="font-bold text-amber-900 text-sm">联机对战</span>
             </div>
           </div>
         </div>

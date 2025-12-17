@@ -452,12 +452,12 @@ onUnmounted(() => {
     </div>
 
     <!-- 主布局容器 -->
-    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1600px] mx-auto w-full p-2 sm:p-4 gap-4 sm:gap-8">
+    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1200px] mx-auto w-full p-2 sm:p-4 gap-4 justify-center items-center">
 
       <!-- 左侧/中间：棋盘区域 -->
-      <div class="flex-1 flex flex-col items-center justify-center min-h-0">
+      <div class="flex-none flex flex-col items-center justify-center">
         <!-- 棋盘容器 -->
-        <div class="relative w-full max-w-[650px] aspect-[9/10] flex items-center justify-center">
+        <div class="relative w-[90vw] sm:w-[650px] aspect-[9/10] flex-none flex items-center justify-center">
           <!-- 棋盘背景装饰 -->
           <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
 
@@ -501,7 +501,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 右侧：信息面板 -->
-      <div class="w-full sm:w-80 lg:w-96 flex flex-col gap-4 h-auto sm:h-full overflow-y-auto">
+      <div class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-4 h-auto sm:h-full overflow-y-auto">
         <!-- 残局对战信息面板 -->
         <div class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-4 border border-white/50 flex flex-col">
           <div class="flex items-center justify-between w-full mb-4">

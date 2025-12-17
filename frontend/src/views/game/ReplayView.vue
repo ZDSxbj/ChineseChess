@@ -80,7 +80,7 @@ onMounted(() => {
     return
   }
 
-  chessBoard = new ChessBoard(canvasBg, canvasCh, 70)
+  chessBoard = new ChessBoard(canvasBg, canvasCh, 65)
   chessBoard.start(saved.selfColor, false)
   hist.value = saved.moveHistory || []
   index.value = hist.value.length // 默认到最后一步
@@ -107,10 +107,10 @@ onUnmounted(() => {
     </div>
 
     <!-- 主内容 -->
-    <div class="relative z-10 flex flex-col items-center justify-center w-full max-w-4xl p-4">
+    <div class="relative z-10 flex flex-col items-center justify-center w-full max-w-4xl p-3">
       <!-- 标题 -->
-      <div class="mb-6 flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800 shadow-sm">
+      <div class="mb-4 flex items-center gap-2">
+        <div class="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800 shadow-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -122,7 +122,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 棋盘容器 -->
-      <div class="relative w-full max-w-[650px] aspect-[9/10] flex items-center justify-center mb-8">
+      <div class="relative w-full max-w-[600px] aspect-[9/10] flex items-center justify-center mb-6">
         <!-- 棋盘背景装饰 -->
         <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
 
