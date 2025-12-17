@@ -49,6 +49,7 @@ func SetupRouter() *gin.Engine {
 	chat := controller.NewChatController(service.NewChatService())
 	room := controller.NewRoomController(service.NewRoomService())
 	fc := controller.NewFriendChallengeController()
+	endgame := controller.NewEndgameController(service.NewEndgameService())
 	// 设置路由组
 	api := r.Group("/api")
 	// 静态资源：通过 /api/uploads 访问后端本地的 ./uploads 目录
@@ -70,6 +71,10 @@ func SetupRouter() *gin.Engine {
 	userRoute.POST("/update_password", user.UpdatePassword)
 	userRoute.POST("/check_password", user.CheckPassword)
 	userRoute.POST("/delete_account", user.DeleteAccount)
+	userRoute.POST("/logout", user.Logout)
+	userRoute.POST("/heartbeat", user.Heartbeat)
+	// 残局挑战结算（一次性经验奖励）
+	userRoute.POST("/endgame/complete", user.EndgameComplete)
 	userRoute.PUT("/profile", user.UpdateUserProfile)
 	userRoute.GET("/friends", friend.GetFriends)
 	userRoute.GET("/friend-requests", friend.GetFriendRequests)
@@ -81,6 +86,10 @@ func SetupRouter() *gin.Engine {
 
 	// 好友挑战（用于初始化加载待处理挑战）
 	userRoute.GET("/friend-challenges", fc.ListIncoming)
+
+	// 残局挑战进度相关
+	userRoute.GET("/endgame/progress", endgame.GetProgress)
+	userRoute.POST("/endgame/progress", endgame.SaveProgress)
 
 	// 聊天相关路由
 	userRoute.GET("/friends/:relationId/messages", chat.GetMessages)

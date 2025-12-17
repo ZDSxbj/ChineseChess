@@ -695,6 +695,12 @@ const logout = async () => {
   showLogoutConfirm.value = false;
 
   try {
+    // 先通知后端：将当前账号置为离线（online=0）
+    try {
+      await RequestHandler.post('/user/logout');
+    } catch (e) {
+      // 若因拦截器/token问题失败，不阻塞前端登出流程
+    }
     // 尝试调用 store.logout，如果类型定义缺失则安全回退（as any）
     await (userStore as any).logout?.();
 

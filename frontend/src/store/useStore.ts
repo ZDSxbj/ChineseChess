@@ -68,6 +68,15 @@ export const useUserStore = defineStore('user', () => {
   })
 
   apiBus.on('API:LOGOUT', () => {
+    // 调用后端登出接口，确保服务器侧在线状态置为离线
+    try {
+      // 动态导入，避免循环依赖
+      import('@/api/user/updateProfile').then(async () => {
+        const instance = await import('@/api/useRequest')
+        // 直接POST到 /user/logout
+        await (instance as any).default.post('/user/logout', {})
+      }).catch(() => {})
+    } catch {}
     logout()
     // 登出不强制修改 rememberMe 标记，让用户偏好保留
   })
