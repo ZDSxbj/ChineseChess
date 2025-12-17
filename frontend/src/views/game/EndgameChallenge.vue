@@ -43,8 +43,10 @@ const moveHistory = ref<Array<{ from: any; to: any; pieceName?: string; pieceCol
 const progressSaved = ref(false)
 
 const getProgressKey = () => {
-  const userId = userStore.userInfo?.id || 'guest'
-  return `endgame-progress-${userId}`
+  const userId = userStore.userInfo?.id
+  const tokenVal = (userStore as any).token?.value ?? (userStore as any).token
+  // 未拿到用户ID但有token，使用临时键 'authed'，否则使用 'guest'
+  return `endgame-progress-${userId ?? (tokenVal ? 'authed' : 'guest')}`
 }
 interface ScenarioProgress {
   result?: 'win' | 'lose'
@@ -52,6 +54,11 @@ interface ScenarioProgress {
   bestSteps?: number
 }
 const progress = ref<Record<string, ScenarioProgress>>({})
+
+const currentProgress = computed(() => {
+  const id = scenarioId.value
+  return id ? progress.value[id] : undefined
+})
 
 const activeScenario = computed<EndgameScenario | null>(() => getScenarioById(scenarioId.value))
 
@@ -69,52 +76,47 @@ const aiLabel = computed(() => {
 })
 
 function loadProgress() {
-  // 优先从后端获取进度，保证多设备同步；失败时回退到本地 localStorage
-  const userId = userStore.userInfo?.id
-  if (!userId) {
-    // 未登录用户直接走本地缓存
-    try {
-      const raw = localStorage.getItem(getProgressKey())
-      if (!raw) return
-      progress.value = JSON.parse(raw)
-    } catch (e) {
-      console.warn('读取残局进度失败', e)
-    }
-    return
-  }
-
-  getEndgameProgress()
-    .then((resp: any) => {
-      const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
-      if (!data || !Array.isArray(data.progress)) return
-      const map: Record<string, ScenarioProgress> = {}
-      data.progress.forEach((item: any) => {
-        const id = String(item.scenario_id)
-        const attempts = Number(item.attempts) || 0
-        const bestSteps = typeof item.best_steps === 'number' ? item.best_steps : undefined
-        const lastResult = item.last_result === 'win' || item.last_result === 'lose' ? item.last_result : undefined
-        map[id] = {
-          attempts,
-          bestSteps,
-          result: lastResult,
+  // 优先从后端获取进度（只要有token即可），失败时回退到本地 localStorage
+  const tokenVal = (userStore as any).token?.value ?? (userStore as any).token
+  if (tokenVal) {
+    getEndgameProgress()
+      .then((resp: any) => {
+        const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
+        if (!data || !Array.isArray(data.progress)) return
+        const map: Record<string, ScenarioProgress> = {}
+        data.progress.forEach((item: any) => {
+          const id = String(item.scenario_id)
+          const attempts = Number(item.attempts) || 0
+          const bestSteps = typeof item.best_steps === 'number' ? item.best_steps : undefined
+          const lastResult = item.last_result === 'win' || item.last_result === 'lose' ? item.last_result : undefined
+          map[id] = { attempts, bestSteps, result: lastResult }
+        })
+        progress.value = map
+        // 同步一份到本地缓存，做离线降级
+        try {
+          localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
+        } catch {}
+      })
+      .catch((e: any) => {
+        console.warn('从后端获取残局进度失败，回退到本地缓存', e)
+        try {
+          const raw = localStorage.getItem(getProgressKey())
+          if (!raw) return
+          progress.value = JSON.parse(raw)
+        } catch (err) {
+          console.warn('读取本地残局进度失败', err)
         }
       })
-      progress.value = map
-      // 同步一份到本地缓存，做离线降级
-      try {
-        localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
-      } catch {}
-    })
-    .catch((e: any) => {
-      console.warn('从后端获取残局进度失败，回退到本地缓存', e)
-      try {
-        const raw = localStorage.getItem(getProgressKey())
-        if (!raw) return
-        progress.value = JSON.parse(raw)
-      } catch (err) {
-        console.warn('读取本地残局进度失败', err)
-      }
-    })
+    return
+  }
+  // 无token：仅使用本地缓存
+  try {
+    const raw = localStorage.getItem(getProgressKey())
+    if (!raw) return
+    progress.value = JSON.parse(raw)
+  } catch (e) {
+    console.warn('读取残局进度失败', e)
+  }
 }
 
 function saveProgress(id: string, result: 'win' | 'lose', steps?: number) {
@@ -536,6 +538,20 @@ onMounted(() => {
   }
 })
 
+// 登录信息异步就绪后，重新拉取进度（解决刷新后清零的问题）
+watch(
+  () => (userStore as any).token?.value ?? (userStore as any).token,
+  (val) => {
+    if (val) loadProgress()
+  },
+)
+watch(
+  () => userStore.userInfo?.id,
+  (id, old) => {
+    if (id && id !== old) loadProgress()
+  },
+)
+
 watch(
   () => route.query.id,
   (id) => {
@@ -729,6 +745,10 @@ onUnmounted(() => {
             <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
               <span class="text-xs text-amber-800/60 mb-1">最近落子</span>
               <span class="font-mono font-bold text-amber-900 text-lg">{{ lastMove }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">历史最少步数</span>
+              <span class="font-mono font-bold text-amber-900 text-lg">{{ currentProgress?.bestSteps ?? '未通关' }}</span>
             </div>
           </div>
         </div>
