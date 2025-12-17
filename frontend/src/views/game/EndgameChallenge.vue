@@ -12,6 +12,8 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useUserStore } from '@/store/useStore'
 import { getGameState, clearGameState } from '@/store/gameStore'
 import { getEndgameProgress, saveEndgameProgress } from '@/api/endgame/progress'
+import { reportEndgameComplete } from '@/api/endgame/complete'
+import { getProfile } from '@/api/user/getProfile'
 
 declare const window: any
 

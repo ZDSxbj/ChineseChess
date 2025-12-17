@@ -1008,12 +1008,18 @@ class ChessBoard {
     if (this.selectedPiece === piece) {
       this.selectedPiece.deselect()
       this.selectedPiece = null
+      // 清空提示并重绘
+      this.hintPositions = []
+      this.drawChesses()
       return
     }
 
     this.selectedPiece?.deselect()
     this.selectedPiece = piece
     piece.select()
+    // 计算并绘制可达提示位置（红点）
+    this.calculateHints(piece)
+    this.drawChesses()
     // 选中棋子音效（仅联机时启用）
     if (this.isNetPlay) {
       this.selectAudio?.play().catch(() => {})
