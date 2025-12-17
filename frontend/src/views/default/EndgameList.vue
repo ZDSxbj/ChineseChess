@@ -9,8 +9,9 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const getProgressKey = () => {
-  const userId = userStore.userInfo?.id || 'guest'
-  return 'endgame-progress-' + userId
+  const userId = userStore.userInfo?.id
+  const tokenVal = (userStore as any).token?.value ?? (userStore as any).token
+  return 'endgame-progress-' + (userId ?? (tokenVal ? 'authed' : 'guest'))
 }
 
 interface ScenarioProgress {
@@ -21,10 +22,9 @@ interface ScenarioProgress {
 const progress = ref<Record<string, ScenarioProgress>>({})
 
 function loadProgress() {
-  const userId = userStore.userInfo?.id
-
-  // 已登录：优先从后端取，确保不同浏览器/设备一致
-  if (userId) {
+  const tokenVal = (userStore as any).token?.value ?? (userStore as any).token
+  // 有token则优先后端拉取，失败再回退本地
+  if (tokenVal) {
     getEndgameProgress()
       .then((resp: any) => {
         const data = resp && typeof resp === 'object' && 'data' in resp ? resp.data : resp
@@ -38,10 +38,7 @@ function loadProgress() {
           map[id] = { attempts, bestSteps, result: lastResult }
         })
         progress.value = map
-        // 同步一份到本地，用作离线缓存
-        try {
-          localStorage.setItem(getProgressKey(), JSON.stringify(progress.value))
-        } catch {}
+        try { localStorage.setItem(getProgressKey(), JSON.stringify(progress.value)) } catch {}
       })
       .catch((e: any) => {
         console.warn('从后端获取残局进度失败，回退到本地缓存', e)
@@ -55,8 +52,7 @@ function loadProgress() {
       })
     return
   }
-
-  // 未登录：仅使用本地缓存
+  // 无token：仅使用本地缓存
   try {
     const raw = localStorage.getItem(getProgressKey())
     if (!raw) return
@@ -84,6 +80,11 @@ function getDifficultyClass(difficulty: string) {
 }
 
 onMounted(() => loadProgress())
+
+// 刷新后 token 或用户ID 异步就绪，重新拉取
+import { watch } from 'vue'
+watch(() => (userStore as any).token?.value ?? (userStore as any).token, (val) => { if (val) loadProgress() })
+watch(() => userStore.userInfo?.id, (id, old) => { if (id && id !== old) loadProgress() })
 </script>
 
 <template>
@@ -114,9 +115,10 @@ onMounted(() => loadProgress())
           </span>
         </div>
 
-        <!-- 第二行：尝试次数 -->
-        <div class="text-base text-gray-600 font-medium">
-          尝试次数：{{ progress[item.id]?.attempts || 0 }}
+        <!-- 第二行：尝试次数 + 最少步数 -->
+        <div class="text-base text-gray-600 font-medium flex items-center justify-between gap-2">
+          <span>尝试次数：{{ progress[item.id]?.attempts || 0 }}</span>
+          <span class="text-sm text-gray-500">最少步数：{{ progress[item.id]?.bestSteps ?? '—' }}</span>
         </div>
 
         <!-- 第三行：标签 + 状态 -->
