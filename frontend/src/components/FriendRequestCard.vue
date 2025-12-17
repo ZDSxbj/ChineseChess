@@ -40,35 +40,45 @@ function handleImageError(e: Event) {
 </script>
 
 <template>
-  <div class="flex items-start gap-4 p-4 border-b border-gray-100 transition-colors duration-150 rounded-lg bg-gradient-to-r from-yellow-50 to-white">
+  <div class="flex items-start gap-4 p-4 border border-amber-200/50 transition-all duration-300 rounded-xl bg-gradient-to-r from-amber-50 to-white shadow-sm hover:shadow-md hover:scale-[1.02] mb-3 mx-2 relative overflow-hidden group">
+    <!-- Decorative background element -->
+    <div class="absolute top-0 right-0 w-16 h-16 bg-amber-100/50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-150 duration-500"></div>
+
     <img
       :src="props.request.senderAvatar || defaultAvatar"
       @error="handleImageError"
       alt="avatar"
-      class="w-14 h-14 rounded-full object-cover border border-gray-200 shadow-sm"
+      class="w-14 h-14 rounded-full object-cover border-2 border-amber-200 shadow-sm z-10"
     />
-    <div class="flex-1 min-w-0">
+    <div class="flex-1 min-w-0 z-10">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <h3 class="text-base font-semibold text-gray-800 truncate">{{ props.request.senderName }}</h3>
-          <span v-if="props.request.unreadCount && props.request.unreadCount > 0" class="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-semibold rounded-full px-2 py-0.5">{{ props.request.unreadCount > 99 ? '99+' : props.request.unreadCount }}</span>
-          <div v-if="props.request.gender === '男'" class="i-carbon-gender-male text-blue-500 text-lg" title="男"></div>
-          <div v-else-if="props.request.gender === '女'" class="i-carbon-gender-female text-pink-500 text-lg" title="女"></div>
+          <h3 class="text-base font-black text-amber-900 truncate">{{ props.request.senderName }}</h3>
+          <span v-if="props.request.unreadCount && props.request.unreadCount > 0" class="ml-2 inline-flex items-center justify-center bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5 shadow-sm animate-pulse">{{ props.request.unreadCount > 99 ? '99+' : props.request.unreadCount }}</span>
+          <div v-if="props.request.gender === '男'" class="i-carbon-gender-male text-blue-600 text-lg" title="男"></div>
+          <div v-else-if="props.request.gender === '女'" class="i-carbon-gender-female text-pink-600 text-lg" title="女"></div>
         </div>
-        <div class="text-xs text-gray-400">{{ props.request.createdAt ? new Date(props.request.createdAt * 1000).toLocaleString() : '' }}</div>
+        <div class="text-xs text-amber-800/60 font-medium">{{ props.request.createdAt ? new Date(props.request.createdAt * 1000).toLocaleString() : '' }}</div>
       </div>
 
-      <div class="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
+      <div class="flex items-center gap-3 mt-1.5 text-sm text-amber-800/70 font-medium">
         <span>场次: {{ props.request.totalGames || 0 }}</span>
         <span>胜率: {{ (props.request.winRate || 0).toFixed(2) }}%</span>
       </div>
-      <div class="text-xs text-gray-400 mt-0.5">经验: {{ props.request.exp || 0 }}</div>
+      <div class="text-xs text-amber-800/50 mt-0.5 font-medium">经验: {{ props.request.exp || 0 }}</div>
 
-      <div class="mt-3 p-3 bg-white border border-dashed border-yellow-100 rounded-md text-sm text-gray-700 whitespace-pre-wrap">{{ props.request.content }}</div>
+      <div class="mt-3 p-3 bg-white/80 border border-dashed border-amber-300 rounded-lg text-sm text-amber-900 whitespace-pre-wrap font-serif shadow-inner relative">
+        <div class="absolute -top-2 -left-2 text-amber-200 text-2xl opacity-50">❝</div>
+        {{ props.request.content || '请求添加好友' }}
+        <div class="absolute -bottom-4 -right-1 text-amber-200 text-2xl opacity-50">❞</div>
+      </div>
 
-      <div class="flex items-center gap-2 mt-3">
-        <button @click="onAccept" class="px-3 py-1 text-xs text-white bg-emerald-500 rounded-full hover:bg-emerald-600">同意</button>
-        <button @click="onReject" class="px-3 py-1 text-xs text-gray-700 border border-gray-200 rounded-full hover:bg-gray-50">拒绝</button>
+      <div class="flex items-center justify-end gap-3 mt-3">
+        <button @click="onReject" class="px-4 py-1.5 text-xs font-bold text-amber-800 border border-amber-300 rounded-full hover:bg-amber-50 transition-colors">拒绝</button>
+        <button @click="onAccept" class="px-5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-full hover:from-emerald-700 hover:to-emerald-800 shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-1">
+          <div class="i-carbon-checkmark"></div>
+          同意
+        </button>
       </div>
     </div>
   </div>

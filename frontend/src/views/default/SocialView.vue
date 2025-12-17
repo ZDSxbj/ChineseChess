@@ -648,11 +648,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-full flex bg-gray-50">
+  <div class="h-full flex bg-[#fdf6e3] animate-fade-in">
     <!-- 左侧好友列表 -->
-    <aside class="w-96 border-r bg-white flex flex-col shadow-sm z-10">
-      <div class="p-5 border-b bg-gray-50/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
-        <h2 class="text-xl font-bold text-gray-800">好友列表</h2>
+    <aside class="w-96 border-r border-amber-200 bg-amber-50/50 flex flex-col shadow-sm z-10">
+      <div class="p-5 border-b border-amber-200 bg-amber-100/80 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+        <h2 class="text-xl font-black text-amber-900 tracking-wide">好友列表</h2>
         <div class="flex items-center gap-2">
           <div v-if="isSearchExpanded" class="flex items-center gap-2 animate-fade-in-right">
             <input
@@ -660,28 +660,28 @@ onBeforeUnmount(() => {
               @keyup.enter="performSearch"
               type="text"
               placeholder="输入用户名搜索"
-              class="px-3 py-1 text-sm border rounded-full focus:outline-none focus:border-blue-500 transition-all w-40"
+              class="px-3 py-1 text-sm border border-amber-300 rounded-full focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600/20 transition-all w-40 bg-white/80 text-amber-900 placeholder-amber-900/40"
             />
-            <button @click="performSearch" class="bg-transparent border-none outline-none p-1 text-gray-500 hover:text-blue-500 transition-colors cursor-pointer flex items-center justify-center" title="搜索">
+            <button @click="performSearch" class="bg-transparent border-none outline-none p-1 text-amber-700 hover:text-amber-900 transition-colors cursor-pointer flex items-center justify-center" title="搜索">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             </button>
-            <button @click="toggleSearch" class="bg-transparent border-none outline-none p-1 text-gray-500 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center" title="关闭">
+            <button @click="toggleSearch" class="bg-transparent border-none outline-none p-1 text-amber-700 hover:text-red-600 transition-colors cursor-pointer flex items-center justify-center" title="关闭">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
-          <button v-else @click="toggleSearch" class="bg-transparent border-none outline-none p-1 text-gray-500 hover:text-blue-500 transition-colors cursor-pointer flex items-center justify-center" title="搜索好友">
+          <button v-else @click="toggleSearch" class="bg-transparent border-none outline-none p-1 text-amber-700 hover:text-amber-900 transition-colors cursor-pointer flex items-center justify-center" title="搜索好友">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </button>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto custom-scrollbar">
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
         <!-- Search Results -->
         <template v-if="isSearchExpanded && searchStatus !== 'idle'">
-          <div v-if="searchStatus === 'searching'" class="p-8 text-center text-gray-500 animate-pulse">搜索中...</div>
-          <div v-else-if="searchStatus === 'not-found'" class="p-8 text-center text-gray-500">未找到该用户</div>
-          <div v-else-if="searchStatus === 'self'" class="p-8 text-center text-gray-500">不能搜索自己</div>
-          <div v-else-if="searchStatus === 'found' && searchResult" class="divide-y divide-gray-50">
+          <div v-if="searchStatus === 'searching'" class="p-8 text-center text-amber-800/60 animate-pulse font-medium">搜索中...</div>
+          <div v-else-if="searchStatus === 'not-found'" class="p-8 text-center text-amber-800/60 font-medium">未找到该用户</div>
+          <div v-else-if="searchStatus === 'self'" class="p-8 text-center text-amber-800/60 font-medium">不能搜索自己</div>
+          <div v-else-if="searchStatus === 'found' && searchResult" class="divide-y divide-amber-200/50">
             <!-- Check if friend -->
             <template v-if="friends.some(f => f.id === searchResult!.id)">
               <FriendCard
@@ -693,31 +693,31 @@ onBeforeUnmount(() => {
             </template>
             <template v-else>
               <!-- Non-friend card -->
-              <div class="flex items-center gap-4 p-4 bg-white border-b border-gray-100">
+              <div class="flex items-center gap-4 p-4 bg-white/60 border-b border-amber-200/50 rounded-xl mb-2">
                 <img
                   :src="searchResult.avatar || defaultAvatar"
                   alt="avatar"
-                  class="w-14 h-14 rounded-full object-cover border border-gray-200 shadow-sm"
+                  class="w-14 h-14 rounded-full object-cover border-2 border-amber-200 shadow-sm"
                 />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                      <h3 class="text-base font-semibold text-gray-800 truncate">{{ searchResult.name }}</h3>
-                      <span v-if="searchResult.gender === '男'" class="text-blue-500 text-lg" title="男">♂</span>
-                      <span v-else-if="searchResult.gender === '女'" class="text-pink-500 text-lg" title="女">♀</span>
-                      <span v-else-if="searchResult.gender === '其他'" class="text-gray-400 text-lg" title="其他">？</span>
+                      <h3 class="text-base font-bold text-amber-900 truncate">{{ searchResult.name }}</h3>
+                      <span v-if="searchResult.gender === '男'" class="text-blue-600 text-lg font-bold" title="男">♂</span>
+                      <span v-else-if="searchResult.gender === '女'" class="text-pink-600 text-lg font-bold" title="女">♀</span>
+                      <span v-else-if="searchResult.gender === '其他'" class="text-gray-500 text-lg font-bold" title="其他">？</span>
                     </div>
                     <!-- Add Button -->
-                    <button :disabled="(searchResult as any).pending" @click="tryAddFriend" class="px-3 py-1 text-xs text-white bg-blue-500 rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" :title="(searchResult as any).pending ? '请等待对方响应' : ''" aria-haspopup="dialog">
+                    <button :disabled="(searchResult as any).pending" @click="tryAddFriend" class="px-4 py-1 text-xs font-bold text-white bg-amber-600 rounded-full hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm" :title="(searchResult as any).pending ? '请等待对方响应' : ''" aria-haspopup="dialog">
                       {{ (searchResult as any).pending ? '已申请' : '添加' }}
                     </button>
                   </div>
 
-                  <div class="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
+                  <div class="flex items-center gap-3 mt-1.5 text-sm text-amber-800/70 font-medium">
                     <span>场次: {{ searchResult.totalGames }}</span>
                     <span>胜率: {{ (searchResult.winRate || 0).toFixed(2) }}%</span>
                   </div>
-                  <div class="text-xs text-gray-400 mt-0.5">经验: {{ searchResult.exp }}</div>
+                  <div class="text-xs text-amber-800/50 mt-0.5 font-medium">经验: {{ searchResult.exp }}</div>
                 </div>
               </div>
             </template>
@@ -726,17 +726,17 @@ onBeforeUnmount(() => {
 
         <!-- Friend List -->
         <template v-else>
-          <div v-if="loading" class="p-8 text-center text-gray-500 animate-pulse">加载中...</div>
-          <div v-if="error" class="p-8 text-center text-red-500 bg-red-50 m-4 rounded-lg">{{ error }}</div>
-          <div v-if="!loading && friends.length === 0" class="p-12 text-center text-gray-400 flex flex-col items-center gap-3">
+          <div v-if="loading" class="p-8 text-center text-amber-800/60 animate-pulse font-medium">加载中...</div>
+          <div v-if="error" class="p-8 text-center text-red-600 bg-red-50 m-4 rounded-lg border border-red-100">{{ error }}</div>
+          <div v-if="!loading && friends.length === 0" class="p-12 text-center text-amber-800/40 flex flex-col items-center gap-3">
             <div class="i-carbon-user-multiple text-4xl opacity-50"></div>
-            <span>暂无好友</span>
+            <span class="font-medium">暂无好友</span>
           </div>
-          <div class="divide-y divide-gray-50">
+          <div class="space-y-1">
             <!-- Friend Requests -->
             <template v-if="friendRequests.length > 0">
-              <div class="px-4 pt-3 pb-1 text-sm text-gray-500">好友申请</div>
-              <div class="divide-y divide-gray-50">
+              <div class="px-4 pt-3 pb-1 text-sm font-bold text-amber-800/60">好友申请</div>
+              <div class="space-y-1">
                 <FriendRequestCard
                   v-for="rq in friendRequests"
                   :key="rq.id"
@@ -760,25 +760,26 @@ onBeforeUnmount(() => {
     </aside>
 
     <!-- 右侧聊天面板 -->
-    <section class="flex-1 flex flex-col bg-white relative">
-      <div v-if="!selectedFriendId" class="absolute inset-0 flex items-center justify-center text-gray-300 bg-gray-50/50">
+    <section class="flex-1 flex flex-col bg-[#fffdf5] relative">
+      <div v-if="!selectedFriendId" class="absolute inset-0 flex items-center justify-center text-amber-800/30 bg-amber-50/30">
         <div class="text-center">
           <div class="i-carbon-chat text-6xl mb-4 mx-auto opacity-50"></div>
-          <p class="text-xl font-medium">选择一个好友开始聊天</p>
+          <p class="text-xl font-bold tracking-widest">选择一个好友开始聊天</p>
         </div>
       </div>
 
       <template v-else>
-        <div class="h-16 border-b flex items-center px-6 bg-white shadow-sm z-10">
-          <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <div class="h-16 border-b border-amber-100 flex items-center px-6 bg-[#fffdf5] backdrop-blur-sm shadow-sm z-10">
+          <h3 class="text-lg font-black text-amber-900 flex items-center gap-2">
             {{ friends.find(f => f.id === selectedFriendId)?.name }}
-            <span v-if="friends.find(f => f.id === selectedFriendId)?.online" class="w-2 h-2 bg-green-500 rounded-full shadow-green-200 shadow-lg"></span>
+            <span v-if="friends.find(f => f.id === selectedFriendId)?.online" class="w-2.5 h-2.5 bg-green-600 rounded-full shadow-sm border border-white" title="在线"></span>
+            <span v-else class="w-2.5 h-2.5 bg-gray-400 rounded-full border border-white" title="离线"></span>
           </h3>
         </div>
 
-        <div ref="chatScrollRef" class="chat-body bg-gray-50 p-6 custom-scrollbar">
+        <div ref="chatScrollRef" class="chat-body bg-[#fffdf5] p-6 custom-scrollbar">
           <div v-if="messages.length === 0" class="flex justify-center py-8">
-            <span class="bg-gray-200 text-gray-500 px-4 py-1 rounded-full text-xs">暂无聊天记录</span>
+            <span class="bg-amber-50 text-amber-800/60 px-4 py-1 rounded-full text-xs font-medium border border-amber-100">暂无聊天记录</span>
           </div>
 
           <div v-for="(msg, idx) in messages" :key="msg.id || idx" class="mb-4">
@@ -788,21 +789,21 @@ onBeforeUnmount(() => {
                 <img
                   :src="(friends.find(f => f.relationId === msg.friendId)?.avatar) || defaultAvatar"
                   alt="avatar"
-                  class="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-sm mr-3"
+                  class="w-10 h-10 rounded-full object-cover border-2 border-amber-200 shadow-sm mr-3"
                   @error="(e) => { const t = e.target as HTMLImageElement; if (!t.src.endsWith('images/default_avatar.png')) t.src = defaultAvatar }"
                 />
               </template>
 
-              <div class="bubble" :class="[ (msg.senderId === (userStore.userInfo?.id || 0)) ? 'bubble--self' : 'bubble--other' ]">
-                <div class="bubble-content">{{ msg.content }}</div>
-                <div class="bubble-time">{{ new Date(msg.createdAt).toLocaleString() }}</div>
+              <div class="bubble shadow-sm" :class="[ (msg.senderId === (userStore.userInfo?.id || 0)) ? 'bubble--self' : 'bubble--other' ]">
+                <div class="bubble-content font-medium">{{ msg.content }}</div>
+                <div class="bubble-time opacity-70">{{ new Date(msg.createdAt).toLocaleString() }}</div>
               </div>
 
               <template v-if="msg.senderId === (userStore.userInfo?.id || 0)">
                 <img
                   :src="userStore.userInfo?.avatar || defaultAvatar"
                   alt="my-avatar"
-                  class="w-10 h-10 rounded-full object-cover border border-gray-200 shadow-sm ml-3"
+                  class="w-10 h-10 rounded-full object-cover border-2 border-amber-200 shadow-sm ml-3"
                   @error="(e) => { const t = e.target as HTMLImageElement; if (!t.src.endsWith('images/default_avatar.png')) t.src = defaultAvatar }"
                 />
               </template>
@@ -810,26 +811,26 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="p-5 bg-white border-t">
+        <div class="p-5 bg-[#fffdf5] border-t border-amber-100 backdrop-blur-sm">
           <div class="flex items-end gap-3 max-w-4xl mx-auto">
             <div class="flex-1 relative">
               <textarea
                 v-model="inputMsg"
                 @keyup.enter.exact.prevent="sendCurrentMessage"
-                class="w-full border border-gray-300 rounded-xl p-3 pr-10 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none bg-gray-50 focus:bg-white transition-all"
+                class="w-full border border-amber-200 rounded-xl p-3 pr-10 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none resize-none bg-white transition-all text-amber-900 placeholder-amber-900/30 shadow-sm"
                 placeholder="输入消息..."
                 rows="3"
               ></textarea>
-              <button class="absolute right-3 bottom-3 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors">
+              <button class="absolute right-3 bottom-3 text-amber-400 hover:text-amber-600 p-1 rounded-full hover:bg-amber-50 transition-colors">
                 <div class="i-carbon-face-add text-xl"></div>
               </button>
             </div>
             <div class="flex flex-col gap-2">
-              <button @click="sendCurrentMessage" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all font-medium flex items-center justify-center gap-2 active:scale-95">
+              <button @click="sendCurrentMessage" class="px-6 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-lg shadow-md hover:shadow-lg transition-all font-bold flex items-center justify-center gap-2 active:scale-95 border border-amber-800/20">
                 <div class="i-carbon-send-alt"></div>
                 发送
               </button>
-              <button @click="onClickChallenge" class="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg shadow-md hover:shadow-lg transition-all font-medium flex items-center justify-center gap-2 active:scale-95">
+              <button @click="onClickChallenge" class="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-lg shadow-md hover:shadow-lg transition-all font-bold flex items-center justify-center gap-2 active:scale-95 border border-emerald-800/20">
                 <div class="i-carbon-game-console"></div>
                 对弈
               </button>
@@ -846,9 +847,9 @@ onBeforeUnmount(() => {
     <div
       v-if="contextMenu.visible"
       :style="{ position: 'fixed', left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
-      class="z-50 bg-white border border-gray-100 rounded-lg shadow-xl py-1 min-w-[120px] animate-fade-in"
+      class="z-50 bg-white border border-amber-200 rounded-lg shadow-xl py-1 min-w-[120px] animate-fade-in"
     >
-      <button class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2" @click="requestDelete(contextMenu.id)">
+      <button class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 font-medium" @click="requestDelete(contextMenu.id)">
         <div class="i-carbon-trash-can"></div>
         删除好友
       </button>
@@ -856,13 +857,13 @@ onBeforeUnmount(() => {
 
     <!-- 确认删除弹窗 -->
     <div v-if="confirmDeleteId" class="fixed inset-0 flex items-center justify-center z-[60]">
-      <div class="bg-black/20 backdrop-blur-sm absolute inset-0 transition-opacity" @click="confirmDeleteId = null"></div>
-      <div class="bg-white p-6 rounded-xl shadow-2xl z-10 w-96 transform transition-all scale-100">
-        <h3 class="text-lg font-bold text-gray-800 mb-2">确认删除</h3>
-        <p class="text-gray-600 mb-6">确定要删除该好友吗？此操作无法撤销。</p>
+      <div class="bg-black/60 backdrop-blur-sm absolute inset-0 transition-opacity" @click="confirmDeleteId = null"></div>
+      <div class="bg-[#fdf6e3] p-6 rounded-xl shadow-2xl z-10 w-96 transform transition-all scale-100 border-2 border-amber-200">
+        <h3 class="text-lg font-black text-amber-900 mb-2">确认删除</h3>
+        <p class="text-amber-800/80 mb-6 font-medium">确定要删除该好友吗？此操作无法撤销。</p>
         <div class="flex justify-end gap-3">
-          <button class="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors" @click="confirmDeleteId = null">取消</button>
-          <button class="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white shadow-md hover:shadow-lg transition-all font-medium" @click="confirmDelete">确认删除</button>
+          <button class="px-5 py-2 rounded-lg border-2 border-amber-200 text-amber-800 hover:bg-amber-100 font-bold transition-colors" @click="confirmDeleteId = null">取消</button>
+          <button class="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md hover:shadow-lg transition-all font-bold" @click="confirmDelete">确认删除</button>
         </div>
       </div>
     </div>
@@ -870,14 +871,14 @@ onBeforeUnmount(() => {
     <!-- 添加好友模态框 -->
     <div v-if="addModalVisible" class="fixed inset-0 z-[90] flex items-center justify-center">
       <!-- backdrop -->
-      <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="closeAddFriendModal"></div>
-      <div role="dialog" aria-modal="true" class="bg-white z-50 w-[420px] max-w-[90%] p-6 rounded-2xl shadow-2xl transform transition-all" @keydown.esc="closeAddFriendModal">
-        <h3 class="text-lg font-semibold text-gray-800 mb-2">发送好友申请</h3>
-        <p class="text-sm text-gray-500 mb-4">给 <span class="font-medium">{{ searchResult?.name }}</span> 留言，让对方更容易接受你的申请。</p>
-        <textarea v-model="addModalContent" rows="4" class="w-full border border-gray-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30" placeholder="说点什么吧（可选）"></textarea>
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closeAddFriendModal"></div>
+      <div role="dialog" aria-modal="true" class="bg-[#fdf6e3] z-50 w-[420px] max-w-[90%] p-6 rounded-2xl shadow-2xl transform transition-all border-2 border-amber-200" @keydown.esc="closeAddFriendModal">
+        <h3 class="text-lg font-black text-amber-900 mb-2">发送好友申请</h3>
+        <p class="text-sm text-amber-800/70 mb-4 font-medium">给 <span class="font-bold text-amber-900">{{ searchResult?.name }}</span> 留言，让对方更容易接受你的申请。</p>
+        <textarea v-model="addModalContent" rows="4" class="w-full border border-amber-300 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/30 bg-white text-amber-900 placeholder-amber-900/30" placeholder="说点什么吧（可选）"></textarea>
         <div class="flex items-center justify-end gap-3 mt-4">
-          <button class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50" @click="closeAddFriendModal">取消</button>
-          <button :disabled="addModalSubmitting" class="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-60" @click="sendAddFriend">发送</button>
+          <button class="px-4 py-2 rounded-lg border-2 border-amber-200 text-amber-800 hover:bg-amber-100 font-bold" @click="closeAddFriendModal">取消</button>
+          <button :disabled="addModalSubmitting" class="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 font-bold shadow-md" @click="sendAddFriend">发送</button>
         </div>
       </div>
     </div>
@@ -885,24 +886,34 @@ onBeforeUnmount(() => {
 
   <!-- 发送方等待对方进入房间 -->
   <div v-if="waitingModal.visible" class="fixed inset-0 z-[95] flex items-center justify-center">
-    <div class="absolute inset-0 bg-black/40"></div>
-    <div class="relative z-10 bg-white p-6 rounded-xl shadow-2xl w-[360px]">
-      <h3 class="text-lg font-semibold mb-2">请等待好友进入房间</h3>
-      <p class="text-gray-600 mb-4">正在等待对方响应...</p>
-      <div class="flex justify-end gap-2">
-        <button class="px-4 py-2 rounded-lg border border-gray-300" @click="onCancelWaiting">取消等待</button>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-amber-50 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <div class="w-16 h-16 mx-auto mb-4 text-amber-600 animate-spin">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        </div>
+        <h3 class="text-2xl font-black text-amber-900 mb-2">等待好友响应...</h3>
+        <p class="text-amber-700 mb-6">已发送对弈邀请，请耐心等待</p>
+        <button @click="onCancelWaiting" class="w-full bg-white border-2 border-amber-300 text-amber-800 py-3 rounded-xl font-bold hover:bg-amber-100 transition-colors">
+          取消等待
+        </button>
       </div>
     </div>
   </div>
 
   <!-- 接收方响应弹窗 -->
   <div v-if="responseModal.visible" class="fixed inset-0 z-[96] flex items-center justify-center">
-    <div class="absolute inset-0 bg-black/40"></div>
-    <div class="relative z-10 bg-white p-6 rounded-xl shadow-2xl w-[380px]">
-      <h3 class="text-lg font-semibold mb-3">{{ responseModal.senderName || '好友' }} 邀请你进入房间</h3>
-      <div class="flex justify-end gap-3">
-        <button class="px-4 py-2 rounded-lg border border-gray-300" @click="onRejectChallenge">拒绝</button>
-        <button class="px-4 py-2 rounded-lg bg-green-500 text-white" @click="onAcceptChallenge">接受</button>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-amber-50 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <h3 class="text-2xl font-black text-amber-900 mb-2">对弈邀请</h3>
+        <p class="text-amber-700 mb-6"><span class="font-bold text-amber-900">{{ responseModal.senderName || '好友' }}</span> 邀请你进行一局对战</p>
+        <div class="flex gap-3">
+            <button @click="onRejectChallenge" class="flex-1 bg-white border-2 border-amber-300 text-amber-800 py-3 rounded-xl font-bold hover:bg-amber-100 transition-colors">
+            拒绝
+            </button>
+            <button @click="onAcceptChallenge" class="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-3 rounded-xl font-bold hover:from-emerald-700 hover:to-emerald-800 transition-colors shadow-lg">
+            接受挑战
+            </button>
+        </div>
       </div>
     </div>
   </div>
@@ -933,13 +944,15 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
 }
 .bubble--self {
-  background: linear-gradient(180deg,#007bff,#006ae6);
-  color: white;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #fffbeb;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 2px 4px rgba(180, 83, 9, 0.2);
 }
 .bubble--other {
-  background: #f1f5f9;
-  color: #111827;
+  background: #ffffff;
+  color: #451a03;
+  border: 1px solid #fde68a;
   border-bottom-left-radius: 4px;
 }
 
@@ -949,7 +962,8 @@ onBeforeUnmount(() => {
 }
 .bubble-time {
   font-size: 11px;
-  color: rgba(0,0,0,0.45);
+  color: currentColor;
+  opacity: 0.7;
   margin-top: 6px;
   text-align: right;
 }
@@ -960,6 +974,7 @@ onBeforeUnmount(() => {
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 6px }
-.custom-scrollbar::-webkit-scrollbar-track { background: #f7fafc }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px }
+.custom-scrollbar::-webkit-scrollbar-track { background: #fffbeb }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #d97706; border-radius: 3px; opacity: 0.5; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #b45309 }
 </style>

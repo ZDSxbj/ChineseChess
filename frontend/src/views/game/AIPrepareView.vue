@@ -31,120 +31,154 @@ function goBack() {
 </script>
 
 <template>
-  <main class="mx-a h-full w-9/10 bg-gray-4 p-4 sm:w-3/5 flex flex-col">
-    <h2 class="mx-a block w-fit text-3xl font-bold mb-6 text-gray-800">
-      人机对战设置
-    </h2>
+  <div class="min-h-screen bg-[#fdf6e3] flex items-center justify-center p-4 relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden">
+      <div class="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-amber-200/20 blur-3xl"></div>
+      <div class="absolute top-[40%] -right-[10%] w-[60%] h-[60%] rounded-full bg-orange-200/20 blur-3xl"></div>
+    </div>
 
-    <!-- 难度选择 -->
-    <div class="bg-white rounded-xl p-6 shadow-lg mb-6">
-      <h3 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-        <span class="mr-2">🎯</span>
-        选择难度
-      </h3>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div
-          v-for="option in difficultyOptions"
-          :key="option.value"
-          class="relative cursor-pointer border-2 rounded-lg p-4 transition-all duration-200"
-          :class="difficulty === option.value 
-            ? 'border-blue-500 bg-blue-50' 
-            : 'border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50'"
-          @click="difficulty = option.value"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-lg font-bold" :class="difficulty === option.value ? 'text-blue-600' : 'text-gray-800'">
-              {{ option.label }}
-            </span>
-            <div
-              class="w-5 h-5 rounded-full border-2 flex items-center justify-center"
-              :class="difficulty === option.value 
-                ? 'border-blue-500 bg-blue-500' 
-                : 'border-gray-400'"
-            >
-              <div v-if="difficulty === option.value" class="w-2 h-2 bg-white rounded-full" />
+    <main class="relative w-full max-w-2xl bg-white/60 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 p-6 sm:p-10 animate-fade-in">
+      <!-- 标题区域 -->
+      <div class="text-center mb-10">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-amber-100 text-amber-800 rounded-2xl mb-4 shadow-inner">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <h2 class="text-3xl font-black text-amber-900 tracking-wider">人机对战设置</h2>
+        <p class="text-amber-700/60 mt-2 font-medium">配置您的专属对局体验</p>
+      </div>
+
+      <!-- 难度选择 -->
+      <div class="mb-8">
+        <h3 class="text-lg font-bold text-amber-900 mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          选择难度
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div
+            v-for="option in difficultyOptions"
+            :key="option.value"
+            class="relative cursor-pointer group rounded-xl p-4 transition-all duration-300 border-2"
+            :class="difficulty === option.value
+              ? 'border-amber-500 bg-amber-50 shadow-md'
+              : 'border-amber-100 bg-white/50 hover:border-amber-300 hover:bg-white'"
+            @click="difficulty = option.value"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-bold text-lg" :class="difficulty === option.value ? 'text-amber-700' : 'text-amber-900/70'">
+                {{ option.label }}
+              </span>
+              <div
+                class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
+                :class="difficulty === option.value
+                  ? 'border-amber-500 bg-amber-500'
+                  : 'border-amber-200 group-hover:border-amber-300'"
+              >
+                <div v-if="difficulty === option.value" class="w-2 h-2 bg-white rounded-full" />
+              </div>
+            </div>
+            <p class="text-xs font-medium" :class="difficulty === option.value ? 'text-amber-600/80' : 'text-amber-800/40'">
+              {{ option.description }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 颜色选择 -->
+      <div class="mb-10">
+        <h3 class="text-lg font-bold text-amber-900 mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+          </svg>
+          选择执子
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- 红方 -->
+          <div
+            class="relative cursor-pointer rounded-xl p-4 flex items-center gap-4 border-2 transition-all duration-300 group"
+            :class="playerColor === 'red'
+              ? 'border-red-500 bg-red-50/50 shadow-md'
+              : 'border-amber-100 bg-white/50 hover:border-red-200 hover:bg-white'"
+            @click="playerColor = 'red'"
+          >
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center text-xl shadow-inner border border-red-200">
+              <div class="w-8 h-8 rounded-full bg-red-500 shadow-lg border-2 border-red-300"></div>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-lg text-gray-800">执红先行</span>
+                <div
+                  class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
+                  :class="playerColor === 'red'
+                    ? 'border-red-500 bg-red-500'
+                    : 'border-gray-200 group-hover:border-red-300'"
+                >
+                  <div v-if="playerColor === 'red'" class="w-2 h-2 bg-white rounded-full" />
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">红方先手，主动出击</p>
             </div>
           </div>
-          <p class="text-sm text-gray-600">{{ option.description }}</p>
-        </div>
-      </div>
-    </div>
 
-    <!-- 颜色选择 -->
-    <div class="bg-white rounded-xl p-6 shadow-lg mb-6">
-      <h3 class="text-xl font-semibold mb-4 text-gray-700 flex items-center">
-        <span class="mr-2">🎨</span>
-        选择棋子颜色
-      </h3>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div
-          class="relative cursor-pointer border-2 rounded-lg p-6 transition-all duration-200 flex flex-col items-center"
-          :class="playerColor === 'red' 
-            ? 'border-red-500 bg-red-50' 
-            : 'border-gray-300 bg-white hover:border-red-300 hover:bg-red-50'"
-          @click="playerColor = 'red'"
-        >
-          <div class="text-4xl mb-2">🔴</div>
-          <span class="text-lg font-bold" :class="playerColor === 'red' ? 'text-red-600' : 'text-gray-800'">
-            执红先行
-          </span>
-          <p class="text-sm text-gray-600 mt-2 text-center">红方先手，主动出击</p>
+          <!-- 黑方 -->
           <div
-            class="absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center"
-            :class="playerColor === 'red' 
-              ? 'border-red-500 bg-red-500' 
-              : 'border-gray-400'"
+            class="relative cursor-pointer rounded-xl p-4 flex items-center gap-4 border-2 transition-all duration-300 group"
+            :class="playerColor === 'black'
+              ? 'border-gray-700 bg-gray-100 shadow-md'
+              : 'border-amber-100 bg-white/50 hover:border-gray-300 hover:bg-white'"
+            @click="playerColor = 'black'"
           >
-            <div v-if="playerColor === 'red'" class="w-2 h-2 bg-white rounded-full" />
-          </div>
-        </div>
-
-        <div
-          class="relative cursor-pointer border-2 rounded-lg p-6 transition-all duration-200 flex flex-col items-center"
-          :class="playerColor === 'black' 
-            ? 'border-gray-800 bg-gray-100' 
-            : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-100'"
-          @click="playerColor = 'black'"
-        >
-          <div class="text-4xl mb-2">⚫</div>
-          <span class="text-lg font-bold" :class="playerColor === 'black' ? 'text-gray-800' : 'text-gray-800'">
-            执黑后行
-          </span>
-          <p class="text-sm text-gray-600 mt-2 text-center">黑方后手，稳扎稳打</p>
-          <div
-            class="absolute top-4 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center"
-            :class="playerColor === 'black' 
-              ? 'border-gray-800 bg-gray-800' 
-              : 'border-gray-400'"
-          >
-            <div v-if="playerColor === 'black'" class="w-2 h-2 bg-white rounded-full" />
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xl shadow-inner border border-gray-200">
+              <div class="w-8 h-8 rounded-full bg-gray-800 shadow-lg border-2 border-gray-600"></div>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-lg text-gray-800">执黑后行</span>
+                <div
+                  class="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
+                  :class="playerColor === 'black'
+                    ? 'border-gray-800 bg-gray-800'
+                    : 'border-gray-200 group-hover:border-gray-400'"
+                >
+                  <div v-if="playerColor === 'black'" class="w-2 h-2 bg-white rounded-full" />
+                </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-1">黑方后手，稳扎稳打</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 操作按钮 -->
-    <div class="mt-auto flex flex-col sm:flex-row gap-4 justify-center pb-4">
-      <button
-        class="border-0 rounded-2xl bg-green-500 text-white p-4 px-8 transition-all duration-200 text-xl font-semibold shadow-lg"
-        hover="bg-green-600 shadow-xl transform scale-105"
-        @click="startGame"
-      >
-        🎮 开始游戏
-      </button>
-      <button
-        class="border-0 rounded-2xl bg-gray-500 text-white p-4 px-8 transition-all duration-200 text-xl font-semibold shadow-lg"
-        hover="bg-gray-600 shadow-xl transform scale-105"
-        @click="goBack"
-      >
-        🏠 返回首页
-      </button>
-    </div>
-  </main>
+      <!-- 操作按钮 -->
+      <div class="flex flex-col-reverse sm:flex-row gap-4 pt-4 border-t border-amber-100">
+        <button
+          class="flex-1 py-3.5 px-6 rounded-xl font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 transition-all duration-300 flex items-center justify-center gap-2"
+          @click="goBack"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          返回首页
+        </button>
+        <button
+          class="flex-[2] py-3.5 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2"
+          @click="startGame"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          开始对弈
+        </button>
+      </div>
+    </main>
+  </div>
 </template>
 
 <style scoped>
-button:hover {
-  transform: scale(1.05);
-}
+/* 移除旧的样式，使用 Tailwind 类 */
 </style>

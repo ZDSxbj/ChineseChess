@@ -296,14 +296,14 @@ function applyReplaySteps(n: number) {
   if (!chessBoard) return
   const scenario = activeScenario.value
   if (!scenario) return
-  
+
   chessBoard.startEndgame({
     pieces: scenario.initialPieces,
     currentTurn: scenario.initialTurn,
     selfColor: 'red',
     aiMode: false,
   })
-  
+
   for (let i = 0; i < n && i < moveHistory.value.length; i++) {
     const step = moveHistory.value[i]
     chessBoard.replayMove(step.from, step.to)
@@ -558,129 +558,174 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col sm:flex-row">
-    <div class="block h-1/5 sm:h-full flex-1" />
-    <div class="relative h-3/5 w-full sm:h-full sm:w-5/12 flex flex-col">
-      <div class="relative flex-1 w-full">
-        <!-- AI思考提示 -->
-        <div v-if="aiThinking" class="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg font-semibold">
-          AI思考中...
-        </div>
-        <canvas
-          ref="background"
-          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        />
-        <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
-      </div>
-      <div class="flex justify-center space-x-4 mb-20">
-        <button
-          class="border-0 rounded-2xl bg-yellow-500 text-white p-4 transition-all duration-200"
-          text="xl"
-          hover="bg-yellow-600"
-          @click="regret"
-        >
-          悔棋
-        </button>
-        <button
-          class="border-0 rounded-2xl bg-gray-500 text-white p-4 transition-all duration-200"
-          text="xl"
-          hover="bg-gray-600"
-          @click="exitChallenge"
-        >
-          退出
-        </button>
-      </div>
+  <div class="h-full w-full bg-[#fdf6e3] flex flex-col sm:flex-row relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 pointer-events-none">
+      <div class="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-amber-200/20 blur-3xl"></div>
+      <div class="absolute top-[40%] -right-[10%] w-[60%] h-[60%] rounded-full bg-orange-200/20 blur-3xl"></div>
     </div>
-    <div class="sm:h-full flex-1 flex flex-col pt-12 pb-20 pr-48">
-      <!-- 残局对战信息面板 -->
-      <div class="bg-white/80 backdrop-blur rounded-xl shadow-sm p-4 mb-4 flex flex-col border border-gray-200">
-        <div class="flex items-center justify-between w-full mb-4">
-          <div class="flex flex-col items-center w-1/3">
-            <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" alt="玩家头像" class="w-12 h-12 rounded-full mb-1 object-cover border-2 border-red-500" />
-            <span class="text-xs truncate w-full text-center font-medium">{{ userStore.userInfo?.name }}</span>
-            <span class="text-xs font-bold mt-1 text-red-600">红方</span>
+
+    <!-- 主布局容器 -->
+    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1200px] mx-auto w-full p-2 sm:p-4 gap-4 justify-center items-center">
+
+      <!-- 左侧/中间：棋盘区域 -->
+      <div class="flex-none flex flex-col items-center justify-center">
+        <!-- 棋盘容器 -->
+        <div class="relative w-[90vw] sm:w-[650px] aspect-[9/10] flex-none flex items-center justify-center">
+          <!-- 棋盘背景装饰 -->
+          <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
+
+          <!-- AI思考提示 -->
+          <div v-if="aiThinking" class="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-100/90 backdrop-blur text-amber-800 px-6 py-2 rounded-full font-bold shadow-lg border border-amber-200 flex items-center gap-2 animate-pulse">
+            <svg class="animate-spin h-4 w-4 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            AI思考中...
           </div>
-          <div class="text-2xl font-black text-gray-400 italic mx-2">VS</div>
-          <div class="flex flex-col items-center w-1/3">
-            <div class="w-12 h-12 rounded-full mb-1 bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg">
-              🤖
-            </div>
-            <span class="text-xs truncate w-full text-center font-medium">电脑</span>
-            <span class="text-xs font-bold mt-1 text-black">黑方</span>
-          </div>
+
+          <canvas
+            ref="background"
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-2xl rounded-lg"
+          />
+          <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" />
         </div>
-        <div class="flex justify-between w-full space-x-2">
-          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">昵称</span>
-              <span class="font-bold text-gray-700">{{ userStore.userInfo?.name || '玩家' }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">经验</span>
-              <span class="font-bold text-gray-700">{{ userStore.userInfo?.exp || 0 }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(2) }}%</span>
-            </div>
-          </div>
-          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">AI难度</span>
-              <span class="font-bold text-gray-700">{{ aiLabel }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">残局</span>
-              <span class="font-bold text-gray-700">{{ activeScenario?.name || '未知' }}</span>
-            </div>
-          </div>
+
+        <!-- 底部按钮栏 -->
+        <div class="mt-6 flex flex-wrap justify-center gap-3 sm:gap-6 w-full max-w-[600px]">
+          <button
+            class="group relative px-6 py-2.5 bg-amber-100 text-amber-900 rounded-xl font-bold shadow-sm hover:bg-amber-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-amber-200"
+            @click="regret"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            悔棋
+          </button>
+          <button
+            class="group relative px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold shadow-sm hover:bg-gray-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-gray-200"
+            @click="exitChallenge"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            退出
+          </button>
         </div>
       </div>
 
-      <!-- 剩余步数提醒 -->
-      <div v-if="status === 'playing' && activeScenario?.maxMoves && !replayMode" class="bg-orange-50 border border-orange-300 rounded-lg p-3 mb-4">
-        <div class="text-center">
-          <span class="text-sm text-orange-700">剩余步数：</span>
-          <span class="text-2xl font-bold" :class="remainingMoves && remainingMoves <= 3 ? 'text-red-600' : 'text-orange-600'">{{ remainingMoves }}</span>
-        </div>
-      </div>
+      <!-- 右侧：信息面板 -->
+      <div class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-4 h-auto sm:h-full overflow-y-auto">
+        <!-- 残局对战信息面板 -->
+        <div class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-4 border border-white/50 flex flex-col">
+          <div class="flex items-center justify-between w-full mb-4">
+            <!-- 玩家 -->
+            <div class="flex flex-col items-center w-1/3 group">
+              <div class="relative">
+                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" alt="玩家头像" class="w-14 h-14 rounded-full mb-2 object-cover border-4 border-red-500 shadow-md transition-transform group-hover:scale-105" />
+                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-xs font-bold text-white shadow-sm">
+                  红
+                </div>
+              </div>
+              <span class="text-sm truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
+            </div>
 
-      <!-- 复盘控制面板 -->
-      <div v-if="replayMode" class="bg-purple-50 border border-purple-300 rounded-lg p-3 mb-4">
-        <div class="text-sm font-semibold text-purple-900 mb-2 text-center">复盘模式</div>
-        <div class="flex gap-2 justify-center mb-2">
-          <button class="rounded bg-blue-600 px-3 py-1 text-white text-sm" @click="replayRestart">重新开始</button>
-        </div>
-        <div class="flex gap-2 justify-center mb-2">
-          <button :disabled="replayIndex <= 0" class="rounded bg-yellow-600 px-3 py-1 text-white text-sm disabled:opacity-40" @click="replayPrev">上一步</button>
-          <button :disabled="replayIndex >= moveHistory.length" class="rounded bg-green-600 px-3 py-1 text-white text-sm disabled:opacity-40" @click="replayNext">下一步</button>
-        </div>
-        <div class="text-xs text-center text-gray-700">第 {{ replayIndex }} 步 / 共 {{ moveHistory.length }} 步</div>
-      </div>
+            <!-- VS -->
+            <div class="flex flex-col items-center justify-center">
+              <span class="text-3xl font-black text-amber-200/80 italic">VS</span>
+            </div>
 
-      <!-- 游戏统计 -->
-      <div v-if="!replayMode" class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-        <div class="text-sm font-semibold text-blue-900 mb-2">游戏信息</div>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <div class="flex justify-between">
-            <span class="text-gray-600">已走步数:</span>
-            <span class="font-bold">{{ chessBoard?.stepsNum || 0 }}</span>
+            <!-- 电脑 -->
+            <div class="flex flex-col items-center w-1/3 group">
+              <div class="relative">
+                <div class="w-14 h-14 rounded-full mb-2 bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-2xl shadow-md border-4 border-white transition-transform group-hover:scale-105">
+                  🤖
+                </div>
+                <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold text-white shadow-sm">
+                  黑
+                </div>
+              </div>
+              <span class="text-sm truncate w-full text-center font-bold text-amber-900">电脑</span>
+            </div>
           </div>
-          <div class="flex justify-between">
-            <span class="text-gray-600">游戏模式:</span>
-            <span class="font-bold">残局挑战</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-gray-600">当前回合:</span>
-            <span class="font-bold">{{ currentTurn }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-gray-600">最近落子:</span>
-            <span class="font-bold">{{ lastMove }}</span>
+
+          <!-- 数据展示 -->
+          <div class="flex justify-between w-full gap-2">
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-amber-800/60">经验</span>
+                <span class="font-bold text-amber-900">{{ userStore.userInfo?.exp || 0 }}</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-amber-800/60">胜率</span>
+                <span class="font-bold text-amber-900">{{ (userStore.userInfo?.winRate || 0).toFixed(0) }}%</span>
+              </div>
+            </div>
+            <div class="flex-1 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-indigo-800/60">难度</span>
+                <span class="font-bold text-indigo-900">{{ aiLabel }}</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-indigo-800/60">残局</span>
+                <span class="font-bold text-indigo-900 truncate max-w-[4em]">{{ activeScenario?.name || '未知' }}</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
+        <!-- 剩余步数提醒 -->
+        <div v-if="status === 'playing' && activeScenario?.maxMoves && !replayMode" class="bg-orange-50/80 backdrop-blur border border-orange-200 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+          <span class="text-sm font-bold text-orange-800">剩余步数</span>
+          <span class="text-3xl font-black" :class="remainingMoves && remainingMoves <= 3 ? 'text-red-600 animate-pulse' : 'text-orange-600'">{{ remainingMoves }}</span>
+        </div>
+
+        <!-- 复盘控制面板 -->
+        <div v-if="replayMode" class="bg-purple-50/80 backdrop-blur border border-purple-200 rounded-2xl p-4 shadow-sm">
+          <div class="text-sm font-bold text-purple-900 mb-3 text-center flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            复盘模式
+          </div>
+          <div class="flex gap-2 justify-center mb-3">
+            <button class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 text-sm font-bold shadow-sm transition-colors" @click="replayRestart">重新开始</button>
+          </div>
+          <div class="flex gap-2 justify-center mb-3">
+            <button :disabled="replayIndex <= 0" class="rounded-lg bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 text-sm font-bold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors" @click="replayPrev">上一步</button>
+            <button :disabled="replayIndex >= moveHistory.length" class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 text-sm font-bold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors" @click="replayNext">下一步</button>
+          </div>
+          <div class="text-xs text-center font-medium text-purple-800/70">第 {{ replayIndex }} 步 / 共 {{ moveHistory.length }} 步</div>
+        </div>
+
+        <!-- 游戏统计 -->
+        <div v-if="!replayMode" class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-1 h-4 bg-amber-500 rounded-full"></div>
+            <span class="text-sm font-bold text-amber-900">对局信息</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">已走步数</span>
+              <span class="font-mono font-bold text-amber-900 text-lg">{{ chessBoard?.stepsNum || 0 }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">游戏模式</span>
+              <span class="font-bold text-amber-900 text-lg">残局挑战</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">当前回合</span>
+              <span class="font-bold text-amber-900 text-lg">{{ currentTurn }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">最近落子</span>
+              <span class="font-mono font-bold text-amber-900 text-lg">{{ lastMove }}</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
   <GameEndModal

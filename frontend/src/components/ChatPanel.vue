@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import type { WebSocketService } from '@/websocket'
 import { nextTick, ref } from 'vue'
 
@@ -39,12 +39,14 @@ defineExpose({
 </script>
 
 <template>
-  <div class="w-full flex flex-col bg-white rounded-lg shadow-sm" :class="[isMinimized ? 'h-12' : 'h-chat']">
-    <div class="px-4 py-2 border-b text-gray-700 font-medium flex justify-between items-center">
-      <span>聊天</span>
+  <div class="w-full flex flex-col bg-[#fdf6e3] rounded-xl shadow-lg border border-amber-200 overflow-hidden transition-all duration-300" :class="[isMinimized ? 'h-12' : 'h-chat']">
+    <div class="px-4 py-3 border-b border-amber-200 bg-amber-100/50 text-amber-900 font-bold flex justify-between items-center cursor-pointer" @click="isMinimized = !isMinimized">
+      <span class="flex items-center gap-2 select-none">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        聊天
+      </span>
       <button
-        class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 focus:outline-none"
-        @click="isMinimized = !isMinimized"
+        class="w-6 h-6 flex items-center justify-center text-amber-700 hover:text-amber-900 focus:outline-none transition-transform hover:scale-110"
       >
         <svg v-if="isMinimized" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -55,30 +57,30 @@ defineExpose({
       </button>
     </div>
 
-    <div v-show="!isMinimized" ref="chatScrollRef" class="flex-1 p-4 overflow-y-auto chat-scroll">
+    <div v-show="!isMinimized" ref="chatScrollRef" class="flex-1 p-4 overflow-y-auto chat-scroll bg-amber-50/30">
       <div v-for="(msg, index) in messages" :key="index" class="mb-4">
         <div class="message-row" :class="[msg.sender === '我' ? 'self' : 'other']">
-          <div class="bubble" :class="[msg.sender === '我' ? 'bubble--self' : 'bubble--other']">
-            <div class="bubble-content">{{ msg.content }}</div>
-            <div class="bubble-time">{{ msg.time }}</div>
+          <div class="bubble shadow-sm" :class="[msg.sender === '我' ? 'bubble--self bg-amber-600 text-white' : 'bubble--other bg-white text-gray-800 border border-amber-100']">
+            <div class="bubble-content text-sm">{{ msg.content }}</div>
+            <div class="bubble-time text-[10px] opacity-70 mt-1 text-right" :class="{'text-amber-100': msg.sender === '我', 'text-gray-400': msg.sender !== '我'}">{{ msg.time }}</div>
           </div>
         </div>
       </div>
     </div>
 
-    <div v-show="!isMinimized" class="px-3 py-3 border-t bg-gray-50 chat-input">
-      <div class="flex items-center space-x-3">
+    <div v-show="!isMinimized" class="px-3 py-3 border-t border-amber-200 bg-white/50 chat-input">
+      <div class="flex items-center space-x-2">
         <input
           v-model="inputMessage"
           type="text"
           :maxlength="maxLen"
-          class="flex-1 px-3 py-3 border rounded text-sm outline-none focus:ring-2 focus:ring-blue-300"
+          class="flex-1 px-3 py-2 border border-amber-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500 bg-white/80"
           placeholder="请输入信息..."
           @keyup.enter="sendMessage"
         />
-        <div class="text-xs text-gray-500">{{ inputMessage.length }}/{{ maxLen }}</div>
+        <div class="text-xs text-amber-700/50 w-8 text-center">{{ inputMessage.length }}/{{ maxLen }}</div>
         <button
-          class="ml-2 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800 text-sm"
+          class="px-4 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-800 text-sm font-bold shadow-md transition-colors"
           @click="sendMessage"
         >
           发送
@@ -90,19 +92,16 @@ defineExpose({
 
 <style scoped>
 .h-chat {
-  /* 占满父容器高度，避免随着消息增长改变自身高度 */
   height: 100%;
 }
 .chat-scroll {
-  /* 消息区占据剩余空间并可滚动；min-height:0 允许在 flex 容器内正确滚动 */
   flex: 1 1 0%;
   min-height: 0;
   overflow-y: auto;
 }
 
 .chat-input {
-  /* 输入区固定高度，避免被消息区挤压 */
-  flex: 0 0 64px;
+  flex: 0 0 auto;
 }
 
 .message-row {
@@ -116,40 +115,33 @@ defineExpose({
 }
 
 .bubble {
-  max-width: 70%;
-  padding: 10px 12px;
+  max-width: 75%;
+  padding: 8px 12px;
   border-radius: 12px;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
 }
 .bubble--self {
-  background: #007bff;
-  color: white;
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 2px;
 }
 .bubble--other {
-  background: #f1f5f9;
-  color: #111827;
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: 2px;
 }
 
 .bubble-content {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.bubble-time {
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.45);
-  margin-top: 6px;
-}
 
 .chat-scroll::-webkit-scrollbar {
   width: 6px;
 }
 .chat-scroll::-webkit-scrollbar-track {
-  background: #f7fafc;
+  background: transparent;
 }
 .chat-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
+  background: #d6d3d1;
   border-radius: 3px;
+}
+.chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
 }
 </style>

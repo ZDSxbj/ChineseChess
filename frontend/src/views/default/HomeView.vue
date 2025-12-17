@@ -28,7 +28,7 @@ function onlinePlay() {
     showMsg('请先登录后再进行在线匹配')
     return
   }
-  
+
   if (matching.value)
     return
   matching.value = true
@@ -64,56 +64,61 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="mx-a h-full w-9/10 bg-gray-4 p-1 sm:w-3/5">
-    <h2 class="mx-a block w-fit">
-      普普通通的首页
-    </h2>
-    <article class="text-xl line-height-9">
-      <p>
-        象棋与国际象棋及围棋并列世界三大棋类之一。象棋主要流行于全球华人、越南人及琉球人社区，是首届世界智力运动会的正式比赛项目之一。
-      </p>
-      <p>
-        本网站是一个简易的象棋对战平台，支持本地对战、人机对战和在线对战。在线对战需要注册账号，或者以游客登录。
-      </p>
-      <p>更多功能待开发...也可能不会</p>
-      <p>点击下方的按钮选择游戏模式。</p>
-    </article>
-    <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        :disabled="matching"
-        @click="singlePlay"
-      >
-        本地对战
-      </button>
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        :disabled="matching"
-        @click="aiPlay"
-      >
-        人机对战
-      </button>
-      <button
-        class="mx-a border-0 rounded-2xl bg-gray-2 p-4 transition-all duration-200"
-        text="black xl"
-        hover="bg-gray-9 text-gray-2"
-        :disabled="matching"
-        @click="onlinePlay"
-      >
-        随机匹配
-      </button>
+  <div class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[url('https://images.unsplash.com/photo-1528154109403-12502c3855a4?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center">
+    <div class="absolute inset-0 bg-amber-900/80 backdrop-blur-sm"></div>
+
+    <div class="relative z-10 text-amber-50 max-w-lg w-full space-y-8 animate-slide-up">
+        <div class="mb-8">
+            <div class="w-24 h-24 mx-auto bg-amber-100 text-amber-900 rounded-2xl flex items-center justify-center text-5xl font-black border-4 border-amber-600 shadow-2xl mb-4 transform rotate-3">
+                象
+            </div>
+            <h1 class="text-4xl font-black tracking-[0.5em] mb-2">中国象棋</h1>
+            <p class="text-amber-200 text-lg font-light">方寸之间，运筹帷幄</p>
+        </div>
+
+        <div class="bg-black/20 p-6 rounded-xl backdrop-blur-md border border-white/10 text-left mb-8 shadow-lg">
+            <h3 class="text-xl font-bold mb-2 text-amber-300">简介</h3>
+            <p class="text-sm leading-relaxed opacity-90 indent-8">
+                中国象棋是起源于中国的一种棋戏，属于二人对抗性游戏的一种。它模拟了古代战争中两军对垒的场景，不仅趣味性强，而且能锻炼思维能力。在这里，你可以体验残局破解的快感，也可以与全球棋友实时对弈。
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 w-full px-4">
+            <!-- Online Match Button -->
+            <button
+                @click="onlinePlay"
+                class="group relative overflow-hidden bg-gradient-to-r from-amber-600 to-amber-700 text-white py-6 px-8 rounded-xl font-bold text-xl shadow-lg hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-3 w-full"
+            >
+                <span class="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M10.5 14.5l-2.5 2.5"/><path d="M13 12l2.5-2.5"/></svg>
+                随机匹配对战
+            </button>
+
+            <div class="grid grid-cols-2 gap-4">
+                <button @click="singlePlay" class="bg-amber-100 text-amber-900 py-4 rounded-xl font-bold text-lg hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2 hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    本地对战
+                </button>
+                <button @click="aiPlay" class="bg-amber-100 text-amber-900 py-4 rounded-xl font-bold text-lg hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2 hover:shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                    人机对战
+                </button>
+            </div>
+        </div>
     </div>
-  </main>
-  <div v-if="matching" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="w-80 rounded-lg bg-white p-6 shadow-lg text-center space-y-4">
-      <div class="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500" />
-      <div class="text-lg font-semibold">正在匹配...</div>
-      <p class="text-sm text-gray-600">请稍等，系统正在为你寻找对手</p>
-      <button class="w-full rounded bg-gray-700 px-4 py-2 text-white" @click="cancelMatch">取消匹配</button>
+
+    <!-- Matching Modal -->
+    <div v-if="matching" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div class="bg-amber-50 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center border-4 border-amber-200 animate-scale-in">
+        <div class="w-16 h-16 mx-auto mb-4 text-amber-600 animate-spin">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        </div>
+        <h3 class="text-2xl font-black text-amber-900 mb-2">正在匹配对手...</h3>
+        <p class="text-amber-700 mb-6">请稍候，正在为您寻找旗鼓相当的对手</p>
+        <button @click="cancelMatch" class="w-full bg-white border-2 border-amber-300 text-amber-800 py-3 rounded-xl font-bold hover:bg-amber-100 transition-colors">
+          取消匹配
+        </button>
+      </div>
     </div>
   </div>
 </template>

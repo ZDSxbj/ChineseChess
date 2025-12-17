@@ -9,18 +9,21 @@ const info = defineModel({
 </script>
 
 <template>
-  <div class="relative mb-4 h-10 w-full">
+  <div class="relative mb-6 h-12 w-full">
     <input
       v-model="info"
-      class="peer h-full w-full border-b-2 border-blue-300 border-none bg-[#ffffff84] text-base"
+      class="peer h-full w-full border-b-2 border-amber-200 bg-transparent text-lg text-amber-900 focus:outline-none pt-4 placeholder-transparent"
       v-bind="$attrs"
       required
+      placeholder="placeholder"
     >
     <div
-      class="absolute bottom-0 h-[2px] w-full scale-x-0 from-[#eb6b26] to-[#eb6b26] bg-gradient-to-r transition-all duration-300 ease peer-focus:scale-x-100 peer-valid:scale-x-100"
+      class="absolute bottom-0 h-[2px] w-full scale-x-0 bg-amber-700 transition-all duration-300 ease peer-focus:scale-x-100 peer-valid:scale-x-100"
     />
     <label
-      class="pointer-events-none absolute bottom-[10px] left-0 text-gray-500 transition-all duration-300 ease peer-focus:border-0 peer-valid:border-0 peer-focus:text-base peer-valid:text-base peer-focus:text-[#eb6b26] peer-valid:text-[#eb6b26] peer-focus:font-bold peer-valid:font-bold peer-focus:-translate-x-[105%] peer-valid:-translate-x-[105%]"
+      class="pointer-events-none absolute left-0 bottom-2 text-amber-700/60 transition-all duration-300 ease
+             peer-focus:-translate-y-6 peer-focus:text-xs peer-focus:text-amber-700 peer-focus:font-bold
+             peer-valid:-translate-y-6 peer-valid:text-xs peer-valid:text-amber-700 peer-valid:font-bold"
       :for="$attrs.id as string"
     >{{ $attrs.label }}</label>
   </div>

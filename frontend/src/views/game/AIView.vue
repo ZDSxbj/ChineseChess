@@ -48,6 +48,7 @@ const quitConfirmVisible = ref(false)
 const moveHistory = ref<string>('')
 const gameStartTime = ref<Date>(new Date())
 let recordSaved = false // 标记是否已保存，防止重复保存
+let isReplaying = false // 标记是否正在恢复棋谱
 
 // 【问题1修复】维护有效行棋历史数组（记录每一步的完整信息）
 // 用于准确计算步数，避免悔棋时历史混乱
@@ -56,6 +57,7 @@ const validMoveHistory = ref<Array<{from: any, to: any, pieceName: string, piece
 // 当前回合与最近一步（响应式）
 const currentTurn = ref<string>('—')
 const lastMove = ref<string>('无')
+const moveCount = ref(0)
 
 function formatMoveLabel(from: any, to: any, pieceName?: string, pieceColor?: string) {
   // 简单中文记谱：例如“马二进三”
@@ -156,7 +158,7 @@ function regret() {
     showMsg('没有可悔棋的步数')
     return
   }
-  
+
   // 【问题1修复】悔棋时从有效历史中删除对应步数
   // 玩家悔棋通常撤销2步（AI的一步 + 玩家的一步），或1步（仅玩家的一步）
   const stepsToPop = undone
@@ -169,9 +171,9 @@ function regret() {
   if (charsToTrim > 0 && moveHistory.value.length >= charsToTrim) {
     moveHistory.value = moveHistory.value.slice(0, moveHistory.value.length - charsToTrim)
   }
-  
+
   showMsg(`悔了${undone}步棋`)
-  
+
   // 【新增】悔棋后立即保存当前对局状态，确保刷新后能恢复悔棋后的状态
   // 仿照联机对战的 saveModalState，这里调用 saveAIGameStateToSession
   saveAIGameStateToSession()
@@ -320,7 +322,7 @@ function refreshUserProfile() {
 function requestAIMove() {
   console.log('requestAIMove called')
   console.log('window.logic:', window.logic)
-  
+
   if (!window.logic || !window.logic.getAIMoveAdaptive) {
     console.error('AI引擎未加载')
     showMsg('AI引擎加载失败')
@@ -475,12 +477,12 @@ onMounted(() => {
       if (d) userStore.setUser(d)
     }).catch(() => {})
   } catch {}
-  
+
   // 【问题2修复】尝试从 sessionStorage 恢复之前的对局状态
   const savedAIGameState = sessionStorage.getItem('aiGameState')
   let isRestoringState = false
   let savedBoardState: any = null
-  
+
   if (savedAIGameState) {
     try {
       const state = JSON.parse(savedAIGameState)
@@ -506,14 +508,14 @@ onMounted(() => {
       sessionStorage.removeItem('aiGameState')
     }
   }
-  
+
   const gridSize = decideSize(isPC.value)
   const canvasBackground = background.value as HTMLCanvasElement
   const canvasChesses = chesses.value as HTMLCanvasElement
-  
+
   console.log('Canvas elements:', canvasBackground, canvasChesses)
   console.log('Grid size:', gridSize)
-  
+
   const ctxBackground = canvasBackground.getContext('2d')
   const ctxChesses = canvasChesses.getContext('2d')
 
@@ -525,7 +527,7 @@ onMounted(() => {
   chessBoard = new ChessBoard(canvasBackground, canvasChesses, gridSize)
   console.log('Starting ChessBoard with color:', playerColor.value)
   chessBoard.start(playerColor.value, false, true) // 第三个参数true表示AI模式
-  
+
   // 【问题2修复】如果恢复了之前的状态，需要恢复棋盘局面
   if (isRestoringState) {
     const restoreMoves = (savedBoardState?.moveHistoryList && savedBoardState.moveHistoryList.length > 0)
@@ -554,7 +556,7 @@ onMounted(() => {
     moveHistory.value = ''
     validMoveHistory.value = []
   }
-  
+
   console.log('ChessBoard started successfully')
 
   window.history.pushState(null, '', window.location.href)
@@ -638,6 +640,7 @@ onMounted(() => {
   try {
     currentTurn.value = chessBoard.currentRole === 'self' ? '你的回合' : '对手回合'
     const mh = chessBoard.moveHistoryList || []
+    moveCount.value = mh.length
     if (mh.length > 0) {
       const last = mh[mh.length - 1]
       lastMove.value = formatMoveLabel(last.from, last.to, last.pieceName, last.pieceColor)
@@ -656,31 +659,34 @@ onMounted(() => {
       console.log('游戏已结束，忽略 BOARD:MOVE:MADE 事件')
       return
     }
-    
+
     lastMove.value = formatMoveLabel(from, to, pieceName, pieceColor)
     // 【问题1修复】维护两份历史：
     // 1. moveHistory：用于发送给后端的紧凑格式（需在悔棋时正确处理）
     // 2. validMoveHistory：用于计算最终的有效步数
-    moveHistory.value += `${from.x}${from.y}${to.x}${to.y}`
-    validMoveHistory.value.push({ from, to, pieceName, pieceColor })
-    
-    // 【问题2修复】落子后立即保存当前对局状态到 sessionStorage
-    // 这样刷新页面时可以恢复对局
-    saveAIGameStateToSession()
+    if (!isReplaying) {
+      moveHistory.value += `${from.x}${from.y}${to.x}${to.y}`
+      validMoveHistory.value.push({ from, to, pieceName, pieceColor })
+      moveCount.value = validMoveHistory.value.length
+
+      // 【问题2修复】落子后立即保存当前对局状态到 sessionStorage
+      // 这样刷新页面时可以恢复对局
+      saveAIGameStateToSession()
+    }
   })
 
 
   // 监听玩家移动完成后的AI思考
   channel.on('GAME:MOVE', () => {
     console.log('GAME:MOVE event received')
-    
+
     // 检查logic是否已加载
     if (!window.logic || !window.logic.isCheckmate) {
       console.error('window.logic not loaded in GAME:MOVE handler')
       showMsg('AI引擎未加载')
       return
     }
-    
+
     // 检查玩家是否被将死
     const board = chessBoard.getCurrentBoard()
     const playerIsCheckmate = window.logic.isCheckmate(board, playerColor.value)
@@ -725,114 +731,156 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col sm:flex-row">
-    <div class="block h-1/5 sm:h-full flex-1" />
-    <div class="relative h-3/5 w-full sm:h-full sm:w-5/12 flex flex-col">
-      <div class="relative flex-1 w-full">
-        <!-- AI思考提示 -->
-        <div v-if="aiThinking" class="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg font-semibold">
-          AI思考中...
-        </div>
-        <canvas
-          ref="background"
-          class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        />
-        <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" />
-      </div>
-      <div class="flex justify-center space-x-4 mb-20">
-        <button
-          class="border-0 rounded-2xl bg-yellow-500 text-white p-4 transition-all duration-200"
-          text="xl"
-          hover="bg-yellow-600"
-          @click="regret"
-        >
-          悔棋
-        </button>
-        <button
-          class="border-0 rounded-2xl bg-red-500 text-white p-4 transition-all duration-200"
-          text="xl"
-          hover="bg-red-600"
-          @click="giveUp"
-        >
-          认输
-        </button>
-        <button
-          class="border-0 rounded-2xl bg-gray-500 text-white p-4 transition-all duration-200"
-          text="xl"
-          hover="bg-gray-600"
-          @click="quit"
-        >
-          退出
-        </button>
-      </div>
+  <div class="h-full w-full bg-[#fdf6e3] flex flex-col sm:flex-row relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 pointer-events-none">
+      <div class="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-amber-200/20 blur-3xl"></div>
+      <div class="absolute top-[40%] -right-[10%] w-[60%] h-[60%] rounded-full bg-orange-200/20 blur-3xl"></div>
     </div>
-    <div class="sm:h-full flex-1 flex flex-col pt-12 pb-20 pr-48">
-      <!-- AI对战信息面板 -->
-      <div class="bg-white/80 backdrop-blur rounded-xl shadow-sm p-4 mb-4 flex flex-col border border-gray-200">
-        <div class="flex items-center justify-between w-full mb-4">
-          <div class="flex flex-col items-center w-1/3">
-            <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" alt="玩家头像" class="w-12 h-12 rounded-full mb-1 object-cover border-2 border-red-500" />
-            <span class="text-xs truncate w-full text-center font-medium">{{ userStore.userInfo?.name }}</span>
-            <span class="text-xs font-bold mt-1" :class="playerColor === 'red' ? 'text-red-600' : 'text-black'">{{ playerColor === 'red' ? '红方' : '黑方' }}</span>
+
+    <!-- 主布局容器 -->
+    <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1200px] mx-auto w-full p-2 sm:p-4 gap-4 justify-center items-center">
+
+      <!-- 左侧/中间：棋盘区域 -->
+      <div class="flex-none flex flex-col items-center justify-center">
+        <!-- 棋盘容器 -->
+        <div class="relative w-[90vw] sm:w-[650px] aspect-[9/10] flex-none flex items-center justify-center">
+          <!-- 棋盘背景装饰 -->
+          <div class="absolute inset-4 bg-[#eecfa1] rounded shadow-2xl transform rotate-0 opacity-50 blur-sm"></div>
+
+          <!-- AI思考提示 -->
+          <div v-if="aiThinking" class="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-amber-100/90 backdrop-blur text-amber-800 px-6 py-2 rounded-full font-bold shadow-lg border border-amber-200 flex items-center gap-2 animate-pulse">
+            <svg class="animate-spin h-4 w-4 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            AI思考中...
           </div>
-          <div class="text-2xl font-black text-gray-400 italic mx-2">VS</div>
-          <div class="flex flex-col items-center w-1/3">
-            <div class="w-12 h-12 rounded-full mb-1 bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg">
-              🤖
-            </div>
-            <span class="text-xs truncate w-full text-center font-medium">电脑</span>
-            <span class="text-xs font-bold mt-1" :class="playerColor === 'red' ? 'text-black' : 'text-red-600'">{{ playerColor === 'red' ? '黑方' : '红方' }}</span>
-          </div>
+
+          <canvas
+            ref="background"
+            class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-2xl rounded-lg"
+          />
+          <canvas ref="chesses" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto" />
         </div>
-        <div class="flex justify-between w-full space-x-2">
-          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">昵称</span>
-              <span class="font-bold text-gray-700">{{ userStore.userInfo?.name || '玩家' }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">经验</span>
-              <span class="font-bold text-gray-700">{{ userStore.userInfo?.exp || 0 }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">胜率</span>
-              <span class="font-bold text-gray-700">{{ (userStore.userInfo?.winRate || 0).toFixed(2) }}%</span>
-            </div>
-          </div>
-          <div class="w-1/2 text-xs space-y-1 bg-gray-50 p-2 rounded-lg">
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">AI难度</span>
-              <span class="font-bold text-gray-700">{{ aiLabel }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-gray-500">棋手</span>
-              <span class="font-bold text-gray-700">超级大脑</span>
-            </div>
-            <!-- 电脑胜率已隐藏（由设计要求移除） -->
-          </div>
+
+        <!-- 底部按钮栏 -->
+        <div class="mt-6 flex flex-wrap justify-center gap-3 sm:gap-6 w-full max-w-[600px]">
+          <button
+            class="group relative px-6 py-2.5 bg-amber-100 text-amber-900 rounded-xl font-bold shadow-sm hover:bg-amber-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-amber-200"
+            @click="regret"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+            悔棋
+          </button>
+          <button
+            class="group relative px-6 py-2.5 bg-red-50 text-red-700 rounded-xl font-bold shadow-sm hover:bg-red-100 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-red-100"
+            @click="giveUp"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h14a2 2 0 012 2v8M3 21h18M5 21v-8a2 2 0 012-2h14a2 2 0 012 2v8" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            认输
+          </button>
+          <button
+            class="group relative px-6 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold shadow-sm hover:bg-gray-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-gray-200"
+            @click="quit"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            退出
+          </button>
         </div>
       </div>
 
-      <!-- 游戏统计 -->
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-        <div class="text-sm font-semibold text-blue-900 mb-2">游戏信息</div>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <div class="flex justify-between">
-            <span class="text-gray-600">已走步数:</span>
-            <span class="font-bold">{{ chessBoard?.stepsNum || 0 }}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-gray-600">游戏模式:</span>
-            <span class="font-bold">人机对战</span>
-          </div>
-            <div class="flex justify-between">
-              <span class="text-gray-600">当前回合:</span>
-              <span class="font-bold">{{ currentTurn }}</span>
+      <!-- 右侧：信息面板 -->
+      <div class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-3 h-auto sm:h-full overflow-y-auto">
+        <!-- AI对战信息面板 -->
+        <div class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-3 border border-white/50 flex flex-col">
+          <div class="flex items-center justify-between w-full mb-3">
+            <!-- 玩家 -->
+            <div class="flex flex-col items-center w-1/3 group">
+              <div class="relative">
+                <img :src="userStore.userInfo?.avatar || '/images/default_avatar.png'" alt="玩家头像" class="w-12 h-12 rounded-full mb-1 object-cover border-4 shadow-md transition-transform group-hover:scale-105" :class="playerColor === 'red' ? 'border-red-500' : 'border-gray-800'" />
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :class="playerColor === 'red' ? 'bg-red-500' : 'bg-gray-800'">
+                  {{ playerColor === 'red' ? '红' : '黑' }}
+                </div>
+              </div>
+              <span class="text-xs truncate w-full text-center font-bold text-amber-900">{{ userStore.userInfo?.name }}</span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-gray-600">最近落子:</span>
-              <span class="font-bold">{{ lastMove }}</span>
+
+            <!-- VS -->
+            <div class="flex flex-col items-center justify-center">
+              <span class="text-3xl font-black text-amber-200/80 italic">VS</span>
             </div>
+
+            <!-- 电脑 -->
+            <div class="flex flex-col items-center w-1/3 group">
+              <div class="relative">
+                <div class="w-12 h-12 rounded-full mb-1 bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-md border-4 border-white transition-transform group-hover:scale-105">
+                  🤖
+                </div>
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :class="playerColor === 'red' ? 'bg-gray-800' : 'bg-red-500'">
+                  {{ playerColor === 'red' ? '黑' : '红' }}
+                </div>
+              </div>
+              <span class="text-xs truncate w-full text-center font-bold text-amber-900">电脑 ({{ aiLabel }})</span>
+            </div>
+          </div>
+
+          <!-- 数据展示 -->
+          <div class="flex justify-between w-full gap-2">
+            <div class="flex-1 bg-amber-50/50 p-2 rounded-lg border border-amber-100">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-amber-800/60">经验</span>
+                <span class="font-bold text-amber-900">{{ userStore.userInfo?.exp || 0 }}</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-amber-800/60">胜率</span>
+                <span class="font-bold text-amber-900">{{ (userStore.userInfo?.winRate || 0).toFixed(0) }}%</span>
+              </div>
+            </div>
+            <div class="flex-1 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-indigo-800/60">难度</span>
+                <span class="font-bold text-indigo-900">{{ aiLabel }}</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-indigo-800/60">棋手</span>
+                <span class="font-bold text-indigo-900">超级大脑</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 游戏统计 -->
+        <div class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-4 shadow-sm">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-1 h-4 bg-amber-500 rounded-full"></div>
+            <span class="text-sm font-bold text-amber-900">对局信息</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">已走步数</span>
+              <span class="font-mono font-bold text-amber-900 text-lg">{{ chessBoard?.stepsNum || 0 }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">游戏模式</span>
+              <span class="font-bold text-amber-900 text-lg">人机对战</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">当前回合</span>
+              <span class="font-bold text-amber-900 text-lg">{{ currentTurn }}</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 border border-amber-100 flex flex-col items-center justify-center">
+              <span class="text-xs text-amber-800/60 mb-1">最近落子</span>
+              <span class="font-mono font-bold text-amber-900 text-lg">{{ lastMove }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

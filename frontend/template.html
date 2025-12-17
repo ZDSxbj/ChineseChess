@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>中国象棋社区 - 弈苑</title>
+    
+    <!-- 引入 Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* 自定义字体 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Serif SC', serif;
+            background-color: #fdf6e3; /* 纸张色 */
+            overflow-x: hidden;
+        }
+
+        .chess-font {
+            font-family: "KaiTi", "楷体", serif;
+        }
+
+        /* 隐藏滚动条但保留功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* 动画类 */
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.3s ease;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
+
+        .slide-up-enter-active {
+            transition: all 0.5s ease-out;
+        }
+        .slide-up-enter-from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen flex flex-col">
+    
+    <!-- 全局顶部导航 (非首页显示) -->
+    <header v-if="currentView !== 'home'" class="bg-amber-900 text-amber-50 py-3 px-4 shadow-lg sticky top-0 z-50 flex justify-between items-center">
+        <div class="flex items-center gap-2 cursor-pointer" @click="currentView = 'home'">
+            <div class="w-8 h-8 bg-amber-100 text-amber-900 rounded flex items-center justify-center font-black border-2 border-amber-600">象</div>
+            <span class="font-bold text-lg tracking-widest">弈苑</span>
+        </div>
+        <div class="flex gap-4 text-sm">
+             <button @click="currentView = 'game'; puzzleMode = false" :class="{'text-amber-200 border-b-2 border-amber-200': currentView === 'game'}" class="hover:text-amber-200 transition">对弈</button>
+             <button @click="currentView = 'puzzle'" :class="{'text-amber-200 border-b-2 border-amber-200': currentView === 'puzzle'}" class="hover:text-amber-200 transition">残局</button>
+             <button @click="currentView = 'community'" :class="{'text-amber-200 border-b-2 border-amber-200': currentView === 'community'}" class="hover:text-amber-200 transition">社区</button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow relative">
+        
+        <!-- 1. 首页 (Landing Page) -->
+        <transition name="fade">
+            <div v-if="currentView === 'home'" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[url('https://images.unsplash.com/photo-1528154109403-12502c3855a4?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center">
+                <div class="absolute inset-0 bg-amber-900/80 backdrop-blur-sm"></div>
+                
+                <div class="relative z-10 text-amber-50 max-w-lg w-full space-y-8 animate-in slide-in-from-bottom-10 duration-700">
+                    <div class="mb-8">
+                        <div class="w-24 h-24 mx-auto bg-amber-100 text-amber-900 rounded-2xl flex items-center justify-center text-5xl font-black border-4 border-amber-600 shadow-2xl mb-4 transform rotate-3">
+                            象
+                        </div>
+                        <h1 class="text-4xl font-black tracking-[0.5em] mb-2">中国象棋</h1>
+                        <p class="text-amber-200 text-lg font-light">方寸之间，运筹帷幄</p>
+                    </div>
+
+                    <div class="bg-black/20 p-6 rounded-xl backdrop-blur-md border border-white/10 text-left mb-8">
+                        <h3 class="text-xl font-bold mb-2 text-amber-300">简介</h3>
+                        <p class="text-sm leading-relaxed opacity-90">
+                            中国象棋是起源于中国的一种棋戏，属于二人对抗性游戏的一种。它模拟了古代战争中两军对垒的场景，不仅趣味性强，而且能锻炼思维能力。在这里，你可以体验残局破解的快感，也可以与全球棋友实时对弈。
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 w-full px-4">
+                        <button @click="startRandomMatch" class="group relative overflow-hidden bg-gradient-to-r from-amber-600 to-amber-700 text-white py-4 px-6 rounded-xl font-bold text-lg shadow-lg hover:scale-105 transition-all active:scale-95 flex items-center justify-center gap-3">
+                            <span class="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M10.5 14.5l-2.5 2.5"/><path d="M13 12l2.5-2.5"/></svg>
+                            随机匹配对战
+                        </button>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <button @click="currentView = 'puzzle'" class="bg-amber-100 text-amber-900 py-3 rounded-xl font-bold hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                                残局闯关
+                            </button>
+                            <button @click="currentView = 'community'" class="bg-amber-100 text-amber-900 py-3 rounded-xl font-bold hover:bg-white transition-colors shadow-md flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                社区讨论
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 2. 对局界面 (Game Page) - 包含 棋盘 + 聊天 + 个人信息 -->
+        <transition name="fade">
+            <div v-if="currentView === 'game'" class="min-h-full flex flex-col md:flex-row max-w-6xl mx-auto p-4 gap-6">
+                
+                <!-- 左侧：棋盘区 -->
+                <div class="flex-1 flex flex-col items-center">
+                     <!-- 模式提示 -->
+                    <div v-if="puzzleMode" class="w-full mb-2 bg-amber-200 text-amber-900 px-4 py-2 rounded-lg text-sm font-bold flex justify-between items-center shadow-sm">
+                        <span class="flex items-center gap-2">🏆 模式：残局挑战 - {{ currentPuzzleTitle }}</span>
+                        <button @click="resetToNormalGame" class="underline hover:text-red-700">退出残局</button>
+                    </div>
+
+                    <!-- 对手信息 (Mock) -->
+                    <div class="w-full flex justify-between items-center mb-2 px-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gray-800 border-2 border-gray-600 flex items-center justify-center text-white">🤖</div>
+                            <div>
+                                <div class="text-sm font-bold text-gray-800">{{ puzzleMode ? '残局AI' : '随机棋友' }}</div>
+                                <div class="text-xs text-green-600 flex items-center">● 在线</div>
+                            </div>
+                        </div>
+                        <div class="text-2xl font-black text-amber-900/20">VS</div>
+                    </div>
+
+                    <!-- 棋盘组件 -->
+                    <div class="relative select-none shadow-2xl rounded-lg overflow-hidden border-8 border-amber-800 bg-[#e6cca0]" 
+                         style="width: min(90vw, 500px); height: min(100vw, 550px); aspect-ratio: 9/10;">
+                         
+                        <svg viewBox="-0.5 -0.5 9 10" class="w-full h-full p-4" @click.stop>
+                            <!-- 棋盘纹理 -->
+                            <defs>
+                               <filter id="wood-grain">
+                                 <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" result="noise" />
+                                 <feColorMatrix type="saturate" values="0.2" />
+                                 <feBlend in="SourceGraphic" in2="noise" mode="multiply" />
+                               </filter>
+                               <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                                  <path d="M0,0 L10,5 L0,10" fill="#22c55e" opacity="0.5"/>
+                               </marker>
+                            </defs>
+
+                            <!-- 网格线 -->
+                            <g stroke="#5c4033" stroke-width="0.05">
+                                <line v-for="i in 10" :key="'h'+i" x1="0" :y1="i-1" x2="8" :y2="i-1" />
+                                <line v-for="i in 9" :key="'v'+i" :x1="i-1" y1="0" :x2="i-1" y2="4" v-if="i!=1 && i!=9" />
+                                <line v-for="i in 9" :key="'v2'+i" :x1="i-1" y1="5" :x2="i-1" y2="9" v-if="i!=1 && i!=9" />
+                                <line x1="0" y1="0" x2="0" y2="9" />
+                                <line x1="8" y1="0" x2="8" y2="9" />
+                                <!-- 斜线 -->
+                                <line x1="3" y1="0" x2="5" y2="2" />
+                                <line x1="5" y1="0" x2="3" y2="2" />
+                                <line x1="3" y1="7" x2="5" y2="9" />
+                                <line x1="5" y1="7" x2="3" y2="9" />
+                            </g>
+                            
+                            <!-- 楚河汉界 -->
+                            <text x="2" y="4.8" font-size="0.6" fill="#5c4033" class="chess-font" style="writing-mode: vertical-rl; pointer-events: none;">楚河</text>
+                            <text x="6" y="4.8" font-size="0.6" fill="#5c4033" class="chess-font" style="writing-mode: vertical-rl; pointer-events: none;">汉界</text>
+
+                            <!-- 棋子渲染 -->
+                            <g v-for="piece in pieces" :key="piece.id" 
+                               :transform="`translate(${piece.x}, ${piece.y})`"
+                               @click="handlePieceClick(piece)"
+                               class="cursor-pointer transition-all duration-300">
+                                
+                                <circle r="0.42" fill="rgba(0,0,0,0.3)" cx="0.05" cy="0.05" />
+                                <circle r="0.4" :fill="piece.color === 'red' ? '#fef3c7' : '#fef3c7'" 
+                                        :stroke="piece.color === 'red' ? '#dc2626' : '#000'" stroke-width="0.03"
+                                        :class="{'animate-pulse': selectedId === piece.id}" />
+                                <circle v-if="selectedId === piece.id" r="0.45" fill="none" stroke="#2563eb" stroke-width="0.05" stroke-dasharray="0.1" />
+                                <circle r="0.32" fill="none" :stroke="piece.color === 'red' ? '#dc2626' : '#000'" stroke-width="0.015" />
+                                <text x="0" y="0.15" text-anchor="middle" font-size="0.5" class="chess-font" font-weight="bold" :fill="piece.color === 'red' ? '#dc2626' : '#000'">
+                                    {{ getPieceLabel(piece.type, piece.color) }}
+                                </text>
+                            </g>
+
+                            <!-- 点击空白处移动层 -->
+                            <rect v-for="(pos, idx) in emptyPositions" :key="'empty'+idx"
+                                  :x="pos.x - 0.4" :y="pos.y - 0.4" width="0.8" height="0.8" fill="transparent"
+                                  @click="handleEmptyClick(pos.x, pos.y)" />
+                        </svg>
+                    </div>
+                    
+                    <!-- 底部控制 -->
+                    <div class="flex gap-4 mt-6">
+                         <button @click="resetBoard" class="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-full hover:bg-amber-200 transition">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                             重置棋局
+                         </button>
+                         <button class="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-600 rounded-full cursor-not-allowed">
+                             悔棋
+                         </button>
+                    </div>
+                </div>
+
+                <!-- 右侧：功能面板 (聊天 + 简介) -->
+                <div class="w-full md:w-80 flex flex-col gap-4 h-[600px]">
+                    
+                    <!-- 个人简介卡片 -->
+                    <div class="bg-white rounded-xl shadow-sm border border-amber-100 p-4">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-12 h-12 rounded-full bg-amber-600 text-white flex items-center justify-center text-xl font-bold border-2 border-amber-200 shadow-inner">
+                                {{ user.avatar }}
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-bold text-gray-800 flex justify-between">
+                                    {{ user.name }}
+                                    <button @click="editProfile = true" class="text-xs text-blue-500 font-normal hover:underline">编辑</button>
+                                </div>
+                                <div class="text-xs text-gray-500">等级: {{ user.rank }} | 胜率: {{ user.winRate }}%</div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-600 italic border-l-2 border-amber-300 pl-2">
+                            "{{ user.bio }}"
+                        </div>
+                    </div>
+
+                    <!-- 聊天室 -->
+                    <div class="flex-1 bg-white rounded-xl shadow-md border border-amber-100 flex flex-col overflow-hidden">
+                        <div class="bg-amber-50 px-4 py-2 border-b border-amber-100 flex justify-between items-center">
+                            <span class="font-bold text-amber-900 text-sm flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                棋局热聊
+                            </span>
+                            <span class="text-xs text-gray-400">3人在线</span>
+                        </div>
+                        
+                        <!-- 消息列表 -->
+                        <div class="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50" ref="chatContainer">
+                            <div v-for="msg in chatMessages" :key="msg.id" class="flex flex-col gap-1">
+                                <div v-if="msg.type === 'system'" class="text-center text-[10px] text-gray-400 my-1">- {{ msg.text }} -</div>
+                                <div v-else :class="['flex gap-2 max-w-[90%]', msg.isMe ? 'self-end flex-row-reverse' : 'self-start']">
+                                    <div class="w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs text-white" 
+                                         :class="msg.isMe ? 'bg-amber-600' : 'bg-gray-400'">
+                                         {{ msg.avatar }}
+                                    </div>
+                                    <div :class="['px-3 py-1.5 rounded-lg text-sm', msg.isMe ? 'bg-amber-100 text-amber-900' : 'bg-white text-gray-800 border border-gray-200']">
+                                        {{ msg.text }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 输入框 -->
+                        <div class="p-2 bg-white border-t border-gray-100 flex gap-2">
+                            <input v-model="newMessage" @keyup.enter="sendMessage" type="text" placeholder="说点什么..." class="flex-1 bg-gray-100 rounded-full px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500">
+                            <button @click="sendMessage" class="bg-amber-600 text-white p-1.5 rounded-full hover:bg-amber-700 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 3. 残局列表 (Puzzle Page) -->
+        <transition name="slide-up">
+            <div v-if="currentView === 'puzzle'" class="max-w-2xl mx-auto p-6 pb-24">
+                <h2 class="text-3xl font-bold text-amber-900 mb-6 font-serif border-b-2 border-amber-200 pb-2">经典残局库</h2>
+                <div class="space-y-4">
+                    <div v-for="puzzle in puzzles" :key="puzzle.id" @click="loadPuzzle(puzzle)"
+                         class="bg-white p-5 rounded-xl shadow-md border-l-4 border-amber-600 cursor-pointer hover:shadow-xl hover:translate-x-1 transition-all">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-800 mb-1">{{ puzzle.title }}</h3>
+                                <p class="text-gray-500 text-sm mb-2">{{ puzzle.description }}</p>
+                                <span class="inline-block bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-bold">难度: {{ puzzle.difficulty }}</span>
+                            </div>
+                            <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 4. 社区界面 (Community Page) -->
+        <transition name="slide-up">
+            <div v-if="currentView === 'community'" class="max-w-xl mx-auto p-4 pb-24">
+                <h2 class="text-2xl font-bold text-amber-900 mb-4 flex items-center gap-2">
+                    <span class="text-2xl">🏮</span> 棋友茶馆
+                </h2>
+                <div class="space-y-6">
+                    <!-- 发帖框 -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-amber-100 flex gap-3">
+                         <div class="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold">{{ user.avatar }}</div>
+                         <div class="flex-1 bg-gray-50 rounded-full px-4 flex items-center text-gray-400 text-sm cursor-text hover:bg-gray-100">分享你的对局心得...</div>
+                    </div>
+
+                    <!-- 帖子列表 -->
+                    <div v-for="post in posts" :key="post.id" class="bg-white p-5 rounded-xl shadow-md border border-amber-50">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl border border-gray-200">{{ post.avatar }}</div>
+                                <div>
+                                    <div class="font-bold text-gray-800 text-sm">{{ post.user }}</div>
+                                    <div class="text-gray-400 text-xs">{{ post.time }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-gray-700 text-sm leading-relaxed mb-4">{{ post.content }}</p>
+                        <div class="w-full h-32 bg-amber-50 rounded-lg mb-4 flex items-center justify-center border border-amber-100 text-amber-900/30 text-xs">
+                            [对局回放快照]
+                        </div>
+                        <div class="flex items-center gap-6 text-gray-400 text-xs">
+                            <button class="flex items-center gap-1 hover:text-red-500 transition"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> {{ post.likes }}</button>
+                            <button class="flex items-center gap-1 hover:text-blue-500 transition"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> {{ post.comments }}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+    </main>
+
+    <!-- 编辑个人资料弹窗 -->
+    <div v-if="editProfile" class="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+            <h3 class="text-lg font-bold text-gray-800">编辑资料</h3>
+            <div>
+                <label class="text-xs text-gray-500">昵称</label>
+                <input v-model="user.name" class="w-full border-b border-gray-300 py-1 focus:outline-none focus:border-amber-600">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">个性签名</label>
+                <textarea v-model="user.bio" class="w-full border border-gray-200 rounded p-2 text-sm mt-1 focus:outline-none focus:ring-1 focus:ring-amber-500" rows="3"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button @click="editProfile = false" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded">取消</button>
+                <button @click="editProfile = false" class="px-4 py-2 text-sm bg-amber-600 text-white rounded hover:bg-amber-700">保存</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, nextTick, reactive, watch } = Vue;
+
+    // --- 常量定义 ---
+    const PIECE_TYPES = {
+        GENERAL: 'general', ADVISOR: 'advisor', ELEPHANT: 'elephant',
+        HORSE: 'horse', ROOK: 'rook', CANNON: 'cannon', SOLDIER: 'soldier',
+    };
+
+    const INITIAL_BOARD = [
+      { id: 'r_rook_1', type: PIECE_TYPES.ROOK, color: 'red', x: 0, y: 9 },
+      { id: 'r_horse_1', type: PIECE_TYPES.HORSE, color: 'red', x: 1, y: 9 },
+      { id: 'r_elephant_1', type: PIECE_TYPES.ELEPHANT, color: 'red', x: 2, y: 9 },
+      { id: 'r_advisor_1', type: PIECE_TYPES.ADVISOR, color: 'red', x: 3, y: 9 },
+      { id: 'r_general', type: PIECE_TYPES.GENERAL, color: 'red', x: 4, y: 9 },
+      { id: 'r_advisor_2', type: PIECE_TYPES.ADVISOR, color: 'red', x: 5, y: 9 },
+      { id: 'r_elephant_2', type: PIECE_TYPES.ELEPHANT, color: 'red', x: 6, y: 9 },
+      { id: 'r_horse_2', type: PIECE_TYPES.HORSE, color: 'red', x: 7, y: 9 },
+      { id: 'r_rook_2', type: PIECE_TYPES.ROOK, color: 'red', x: 8, y: 9 },
+      { id: 'r_cannon_1', type: PIECE_TYPES.CANNON, color: 'red', x: 1, y: 7 },
+      { id: 'r_cannon_2', type: PIECE_TYPES.CANNON, color: 'red', x: 7, y: 7 },
+      { id: 'r_soldier_1', type: PIECE_TYPES.SOLDIER, color: 'red', x: 0, y: 6 },
+      { id: 'r_soldier_2', type: PIECE_TYPES.SOLDIER, color: 'red', x: 2, y: 6 },
+      { id: 'r_soldier_3', type: PIECE_TYPES.SOLDIER, color: 'red', x: 4, y: 6 },
+      { id: 'r_soldier_4', type: PIECE_TYPES.SOLDIER, color: 'red', x: 6, y: 6 },
+      { id: 'r_soldier_5', type: PIECE_TYPES.SOLDIER, color: 'red', x: 8, y: 6 },
+      { id: 'b_rook_1', type: PIECE_TYPES.ROOK, color: 'black', x: 0, y: 0 },
+      { id: 'b_horse_1', type: PIECE_TYPES.HORSE, color: 'black', x: 1, y: 0 },
+      { id: 'b_elephant_1', type: PIECE_TYPES.ELEPHANT, color: 'black', x: 2, y: 0 },
+      { id: 'b_advisor_1', type: PIECE_TYPES.ADVISOR, color: 'black', x: 3, y: 0 },
+      { id: 'b_general', type: PIECE_TYPES.GENERAL, color: 'black', x: 4, y: 0 },
+      { id: 'b_advisor_2', type: PIECE_TYPES.ADVISOR, color: 'black', x: 5, y: 0 },
+      { id: 'b_elephant_2', type: PIECE_TYPES.ELEPHANT, color: 'black', x: 6, y: 0 },
+      { id: 'b_horse_2', type: PIECE_TYPES.HORSE, color: 'black', x: 7, y: 0 },
+      { id: 'b_rook_2', type: PIECE_TYPES.ROOK, color: 'black', x: 8, y: 0 },
+      { id: 'b_cannon_1', type: PIECE_TYPES.CANNON, color: 'black', x: 1, y: 2 },
+      { id: 'b_cannon_2', type: PIECE_TYPES.CANNON, color: 'black', x: 7, y: 2 },
+      { id: 'b_soldier_1', type: PIECE_TYPES.SOLDIER, color: 'black', x: 0, y: 3 },
+      { id: 'b_soldier_2', type: PIECE_TYPES.SOLDIER, color: 'black', x: 2, y: 3 },
+      { id: 'b_soldier_3', type: PIECE_TYPES.SOLDIER, color: 'black', x: 4, y: 3 },
+      { id: 'b_soldier_4', type: PIECE_TYPES.SOLDIER, color: 'black', x: 6, y: 3 },
+      { id: 'b_soldier_5', type: PIECE_TYPES.SOLDIER, color: 'black', x: 8, y: 3 },
+    ];
+
+    const PUZZLES = [
+      { id: 1, title: "二鬼拍门", difficulty: "入门", description: "双兵（卒）侵入对方九宫，威胁老帅。", board: [
+          { id: 'r_general', type: PIECE_TYPES.GENERAL, color: 'red', x: 4, y: 9 },
+          { id: 'r_soldier_1', type: PIECE_TYPES.SOLDIER, color: 'red', x: 3, y: 1 },
+          { id: 'r_soldier_2', type: PIECE_TYPES.SOLDIER, color: 'red', x: 5, y: 1 },
+          { id: 'b_general', type: PIECE_TYPES.GENERAL, color: 'black', x: 4, y: 0 },
+          { id: 'b_advisor_1', type: PIECE_TYPES.ADVISOR, color: 'black', x: 3, y: 0 },
+      ]},
+      { id: 2, title: "立马车", difficulty: "中级", description: "车马配合，马作炮架或限制对方将帅。", board: [
+          { id: 'r_general', type: PIECE_TYPES.GENERAL, color: 'red', x: 4, y: 9 },
+          { id: 'r_rook_1', type: PIECE_TYPES.ROOK, color: 'red', x: 4, y: 1 },
+          { id: 'r_horse_1', type: PIECE_TYPES.HORSE, color: 'red', x: 6, y: 2 },
+          { id: 'b_general', type: PIECE_TYPES.GENERAL, color: 'black', x: 4, y: 0 },
+          { id: 'b_advisor_1', type: PIECE_TYPES.ADVISOR, color: 'black', x: 5, y: 0 },
+          { id: 'b_advisor_2', type: PIECE_TYPES.ADVISOR, color: 'black', x: 3, y: 0 },
+      ]}
+    ];
+
+    const POSTS = [
+      { id: 1, user: "棋坛老将", avatar: "👴", content: "刚才这局棋下得真是惊心动魄！红方弃车保帅，绝地反击。", likes: 128, comments: 45, time: "10分钟前" },
+      { id: 2, user: "楚河汉界", avatar: "🏮", content: "分享一个屏风马破当头炮的定式，新手必学！", likes: 89, comments: 12, time: "1小时前" }
+    ];
+
+    createApp({
+        setup() {
+            // --- 状态 ---
+            const currentView = ref('home');
+            const puzzleMode = ref(false);
+            const currentPuzzleTitle = ref('');
+            
+            // 棋盘状态
+            const pieces = ref(JSON.parse(JSON.stringify(INITIAL_BOARD)));
+            const selectedId = ref(null);
+            const turn = ref('red');
+
+            // 用户与聊天
+            const user = reactive({
+                name: "落子无悔",
+                rank: "业余三段",
+                winRate: 58,
+                bio: "以棋会友，乐在其中。",
+                avatar: "我"
+            });
+            const editProfile = ref(false);
+            const chatMessages = ref([
+                { id: 1, text: "已加入房间", type: "system", isMe: false },
+                { id: 2, text: "你好！请多指教。", avatar: "🤖", isMe: false }
+            ]);
+            const newMessage = ref("");
+            const chatContainer = ref(null);
+
+            // 社区数据
+            const puzzles = ref(PUZZLES);
+            const posts = ref(POSTS);
+
+            // --- 计算属性 ---
+            const emptyPositions = computed(() => {
+                // 如果没有选中，或者选中的不是当前回合的棋子，不显示空地点击区域
+                if (!selectedId.value) return [];
+                const piece = pieces.value.find(p => p.id === selectedId.value);
+                if (!piece || piece.color !== turn.value) return [];
+
+                // 简单的性能优化：只计算棋盘所有的点，实际应该只显示合法移动点
+                // 为了Vue单文件简洁，我们还是用全盘点击检测，但在handleEmptyClick里验证逻辑
+                const positions = [];
+                for (let y = 0; y < 10; y++) {
+                    for (let x = 0; x < 9; x++) {
+                        if (!pieces.value.find(p => p.x === x && p.y === y)) {
+                            positions.push({x, y});
+                        }
+                    }
+                }
+                return positions;
+            });
+
+            // --- 逻辑方法 ---
+
+            // 棋子移动规则 (简化版)
+            const isValidMove = (piece, tx, ty) => {
+                const dx = tx - piece.x;
+                const dy = ty - piece.y;
+                const adx = Math.abs(dx);
+                const ady = Math.abs(dy);
+                const getPieceAt = (x, y) => pieces.value.find(p => p.x === x && p.y === y);
+                const targetPiece = getPieceAt(tx, ty);
+
+                if (targetPiece && targetPiece.color === piece.color) return false;
+
+                switch (piece.type) {
+                    case PIECE_TYPES.ROOK:
+                        if (piece.x !== tx && piece.y !== ty) return false;
+                        if (piece.x === tx) {
+                            for (let i = Math.min(piece.y, ty) + 1; i < Math.max(piece.y, ty); i++) if (getPieceAt(tx, i)) return false;
+                        } else {
+                            for (let i = Math.min(piece.x, tx) + 1; i < Math.max(piece.x, tx); i++) if (getPieceAt(i, ty)) return false;
+                        }
+                        return true;
+                    case PIECE_TYPES.HORSE:
+                        if (!((adx === 1 && ady === 2) || (adx === 2 && ady === 1))) return false;
+                        if (adx === 2 && getPieceAt(piece.x + dx / 2, piece.y)) return false;
+                        if (ady === 2 && getPieceAt(piece.x, piece.y + dy / 2)) return false;
+                        return true;
+                    case PIECE_TYPES.ELEPHANT:
+                        if (adx !== 2 || ady !== 2) return false;
+                        if (piece.color === 'red' && ty < 5) return false;
+                        if (piece.color === 'black' && ty > 4) return false;
+                        if (getPieceAt(piece.x + dx / 2, piece.y + dy / 2)) return false;
+                        return true;
+                    case PIECE_TYPES.ADVISOR:
+                        if (adx !== 1 || ady !== 1) return false;
+                        if (tx < 3 || tx > 5) return false;
+                        if (piece.color === 'red' && ty < 7) return false;
+                        if (piece.color === 'black' && ty > 2) return false;
+                        return true;
+                    case PIECE_TYPES.GENERAL:
+                        if (adx + ady !== 1) return false;
+                        if (tx < 3 || tx > 5) return false;
+                        if (piece.color === 'red' && ty < 7) return false;
+                        if (piece.color === 'black' && ty > 2) return false;
+                        return true;
+                    case PIECE_TYPES.CANNON:
+                        if (piece.x !== tx && piece.y !== ty) return false;
+                        let count = 0;
+                        if (piece.x === tx) {
+                            for (let i = Math.min(piece.y, ty) + 1; i < Math.max(piece.y, ty); i++) if (getPieceAt(tx, i)) count++;
+                        } else {
+                            for (let i = Math.min(piece.x, tx) + 1; i < Math.max(piece.x, tx); i++) if (getPieceAt(i, ty)) count++;
+                        }
+                        if (!targetPiece && count === 0) return true;
+                        if (targetPiece && count === 1) return true;
+                        return false;
+                    case PIECE_TYPES.SOLDIER:
+                        if (adx + ady !== 1) return false;
+                        if (piece.color === 'red') {
+                            if (ty > piece.y) return false;
+                            if (piece.y >= 5 && piece.x !== tx) return false;
+                        } else {
+                            if (ty < piece.y) return false;
+                            if (piece.y <= 4 && piece.x !== tx) return false;
+                        }
+                        return true;
+                    default: return false;
+                }
+            };
+
+            const executeMove = (piece, x, y) => {
+                const targetPiece = pieces.value.find(p => p.x === x && p.y === y);
+                // 移除被吃子
+                if (targetPiece) {
+                    pieces.value = pieces.value.filter(p => p.id !== targetPiece.id);
+                    if (targetPiece.type === PIECE_TYPES.GENERAL) {
+                        alert(piece.color === 'red' ? "红方胜利！" : "黑方胜利！");
+                        resetBoard();
+                        return;
+                    }
+                }
+                // 移动
+                piece.x = x;
+                piece.y = y;
+                selectedId.value = null;
+                turn.value = turn.value === 'red' ? 'black' : 'red';
+                
+                // 模拟对方思考回话
+                if (Math.random() > 0.7) {
+                    setTimeout(() => {
+                        chatMessages.value.push({
+                            id: Date.now(),
+                            text: "这步棋走得不错...",
+                            avatar: "🤖",
+                            isMe: false
+                        });
+                    }, 1500);
+                }
+            };
+
+            const handlePieceClick = (piece) => {
+                if (selectedId.value) {
+                    const selectedPiece = pieces.value.find(p => p.id === selectedId.value);
+                    if (selectedPiece.id === piece.id) {
+                        selectedId.value = null; // 取消选中
+                    } else if (selectedPiece.color === piece.color) {
+                        selectedId.value = piece.id; // 切换己方棋子
+                    } else {
+                        // 吃子
+                        if (isValidMove(selectedPiece, piece.x, piece.y)) {
+                            executeMove(selectedPiece, piece.x, piece.y);
+                        }
+                    }
+                } else if (piece.color === turn.value) {
+                    selectedId.value = piece.id;
+                }
+            };
+
+            const handleEmptyClick = (x, y) => {
+                if (!selectedId.value) return;
+                const piece = pieces.value.find(p => p.id === selectedId.value);
+                if (isValidMove(piece, x, y)) {
+                    executeMove(piece, x, y);
+                }
+            };
+
+            const resetBoard = () => {
+                pieces.value = JSON.parse(JSON.stringify(INITIAL_BOARD));
+                turn.value = 'red';
+                selectedId.value = null;
+                puzzleMode.value = false;
+            };
+
+            const startRandomMatch = () => {
+                resetBoard();
+                currentView.value = 'game';
+                chatMessages.value = [
+                    { id: 1, text: "正在匹配...", type: "system" },
+                    { id: 2, text: "匹配成功！对手已就位。", type: "system" },
+                    { id: 3, text: "请多指教。", avatar: "🤖", isMe: false }
+                ];
+            };
+
+            const loadPuzzle = (puzzle) => {
+                pieces.value = JSON.parse(JSON.stringify(puzzle.board));
+                turn.value = 'red';
+                currentPuzzleTitle.value = puzzle.title;
+                puzzleMode.value = true;
+                currentView.value = 'game';
+                chatMessages.value = [
+                    { id: 1, text: `开始挑战残局：${puzzle.title}`, type: "system" }
+                ];
+            };
+
+            // 聊天
+            const sendMessage = () => {
+                if (!newMessage.value.trim()) return;
+                chatMessages.value.push({
+                    id: Date.now(),
+                    text: newMessage.value,
+                    avatar: user.avatar,
+                    isMe: true
+                });
+                newMessage.value = "";
+                nextTick(() => {
+                    if (chatContainer.value) chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                });
+            };
+
+            const getPieceLabel = (type, color) => {
+                const labels = {
+                    'general': color === 'red' ? '帅' : '将',
+                    'advisor': color === 'red' ? '仕' : '士',
+                    'elephant': color === 'red' ? '相' : '象',
+                    'horse': color === 'red' ? '傌' : '馬',
+                    'rook': color === 'red' ? '俥' : '車',
+                    'cannon': color === 'red' ? '炮' : '砲',
+                    'soldier': color === 'red' ? '兵' : '卒',
+                };
+                return labels[type];
+            };
+
+            const resetToNormalGame = () => {
+                resetBoard();
+                chatMessages.value.push({ id: Date.now(), text: "已退出残局模式", type: "system" });
+            };
+
+            return {
+                currentView, pieces, selectedId, turn, user, editProfile, chatMessages, newMessage,
+                puzzles, posts, puzzleMode, currentPuzzleTitle, emptyPositions, chatContainer,
+                startRandomMatch, handlePieceClick, handleEmptyClick, resetBoard, loadPuzzle, sendMessage,
+                getPieceLabel, resetToNormalGame
+            };
+        }
+    }).mount('#app');
+</script>
+
+</body>
+</html>
