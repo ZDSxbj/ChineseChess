@@ -587,7 +587,13 @@ onUnmounted(() => {
     <div class="relative z-10 flex-1 flex flex-col sm:flex-row h-full max-w-[1200px] mx-auto w-full p-2 sm:p-4 gap-4 justify-center items-center">
 
       <!-- 左侧/中间：棋盘区域 -->
-      <div class="flex-none flex flex-col items-center justify-center">
+      <div class="flex-none flex flex-col items-center justify-center w-full">
+        <div v-if="replayMode" class="mb-4 flex items-center gap-2 text-amber-900 font-black text-xl">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          对局复盘
+        </div>
         <!-- 棋盘容器 -->
         <div class="relative w-[90vw] sm:w-[650px] aspect-[9/10] flex-none flex items-center justify-center">
           <!-- 棋盘背景装饰 -->
@@ -610,7 +616,7 @@ onUnmounted(() => {
         </div>
 
         <!-- 底部按钮栏 -->
-        <div class="mt-6 flex flex-wrap justify-center gap-3 sm:gap-6 w-full max-w-[600px]">
+        <div v-if="!replayMode" class="mt-6 flex flex-wrap justify-center gap-3 sm:gap-6 w-full max-w-[600px]">
           <button
             class="group relative px-6 py-2.5 bg-amber-100 text-amber-900 rounded-xl font-bold shadow-sm hover:bg-amber-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2 border border-amber-200"
             @click="regret"
@@ -630,10 +636,59 @@ onUnmounted(() => {
             退出
           </button>
         </div>
+
+        <!-- 复盘控制栏（与 ReplayView 对齐） -->
+        <div v-if="replayMode" class="mt-4 w-full max-w-[800px] px-3">
+          <div class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-4 shadow-lg w-full flex flex-col items-center gap-3">
+            <div class="flex flex-wrap justify-center gap-3 w-full">
+              <button
+                class="group relative px-5 py-2 bg-gray-100 text-gray-700 rounded-xl font-bold shadow-sm hover:bg-gray-200 hover:shadow-md transition-all duration-200 flex items-center gap-2 border border-gray-200"
+                @click="exitReplay"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                退出
+              </button>
+              <button
+                class="group relative px-5 py-2 bg-blue-50 text-blue-700 rounded-xl font-bold shadow-sm hover:bg-blue-100 hover:shadow-md transition-all duration-200 flex items-center gap-2 border border-blue-100"
+                @click="replayRestart"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                重新开始
+              </button>
+              <button
+                :disabled="replayIndex <= 0"
+                class="group relative px-5 py-2 bg-amber-100 text-amber-900 rounded-xl font-bold shadow-sm hover:bg-amber-200 hover:shadow-md transition-all duration-200 flex items-center gap-2 border border-amber-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="replayPrev"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                上一步
+              </button>
+              <button
+                :disabled="replayIndex >= moveHistory.length"
+                class="group relative px-5 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-bold shadow-sm hover:bg-emerald-100 hover:shadow-md transition-all duration-200 flex items-center gap-2 border border-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="replayNext"
+              >
+                下一步
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+            <div class="text-xs font-bold text-amber-800/60 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
+              第 {{ replayIndex }} 步 / 共 {{ moveHistory.length }} 步
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 右侧：信息面板 -->
-      <div class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-4 h-auto sm:h-full overflow-y-auto">
+      <div v-if="!replayMode" class="w-full sm:w-72 lg:w-80 flex-none flex flex-col gap-4 h-auto sm:h-full overflow-y-auto">
         <!-- 残局对战信息面板 -->
         <div class="bg-white/60 backdrop-blur-md rounded-2xl shadow-sm p-4 border border-white/50 flex flex-col">
           <div class="flex items-center justify-between w-full mb-4">
@@ -706,24 +761,7 @@ onUnmounted(() => {
           <span class="text-3xl font-black" :class="remainingMoves && remainingMoves <= 3 ? 'text-red-600 animate-pulse' : 'text-orange-600'">{{ remainingMoves }}</span>
         </div>
 
-        <!-- 复盘控制面板 -->
-        <div v-if="replayMode" class="bg-purple-50/80 backdrop-blur border border-purple-200 rounded-2xl p-4 shadow-sm">
-          <div class="text-sm font-bold text-purple-900 mb-3 text-center flex items-center justify-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            复盘模式
-          </div>
-          <div class="flex gap-2 justify-center mb-3">
-            <button class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 text-sm font-bold shadow-sm transition-colors" @click="replayRestart">重新开始</button>
-          </div>
-          <div class="flex gap-2 justify-center mb-3">
-            <button :disabled="replayIndex <= 0" class="rounded-lg bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 text-sm font-bold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors" @click="replayPrev">上一步</button>
-            <button :disabled="replayIndex >= moveHistory.length" class="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 text-sm font-bold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed transition-colors" @click="replayNext">下一步</button>
-          </div>
-          <div class="text-xs text-center font-medium text-purple-800/70">第 {{ replayIndex }} 步 / 共 {{ moveHistory.length }} 步</div>
-        </div>
+        <!-- 复盘控制面板移至棋盘下方，与其他模式保持一致 -->
 
         <!-- 游戏统计 -->
         <div v-if="!replayMode" class="bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl p-4 shadow-sm">
