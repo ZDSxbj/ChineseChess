@@ -1,0 +1,8 @@
+.git
+*.log
+vendor
+uploads
+.env*
+.DS_Store
+**/.vscode
+**/.idea

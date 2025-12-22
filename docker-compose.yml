@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   frontend:
     build:
-      context: ./chinese-chess-frontend  # 指向前端代码的目录
+      context: ./frontend  # 指向前端代码的目录
       dockerfile: Dockerfile
     ports:
       - "80:80"
@@ -14,10 +12,13 @@ services:
 
   backend:
     build:
-      context: ./chinese-chess-backend
+      context: ./backend
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    volumes:
+      - ./backend/config.json:/app/config.json:ro
+      - ./backend/uploads:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -25,6 +26,7 @@ services:
         condition: service_started
     environment:
       FRONTEND_URL: ${FRONTEND_URL}
+      PUBLIC_API_PREFIX: ${PUBLIC_API_PREFIX:-/chess/api}
       DB_HOST: mysql
       DB_USERNAME: root
       DB_PASSWORD: example

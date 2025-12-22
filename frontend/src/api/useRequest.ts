@@ -4,7 +4,8 @@ import axios from 'axios'
 import { useUserStore } from '@/store/useStore'
 import apiBus from '@/utils/apiBus'
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
+// 优先使用环境变量，其次走同域反代路径，避免 CORS
+export const API_URL = import.meta.env.VITE_API_URL || '/chess/api'
 
 const instance = axios.create({
   baseURL: API_URL,

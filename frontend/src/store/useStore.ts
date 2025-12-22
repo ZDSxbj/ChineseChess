@@ -18,7 +18,7 @@ export const useUserStore = defineStore('user', () => {
       t.value = persisted as string
       return t.value
     }
-    apiBus.emit('API:UN_AUTH', null)
+    // 未登录时不主动广播未授权事件，避免在 /auth/* 页面被路由守卫重定向
     return ''
   })
 
