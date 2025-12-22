@@ -52,6 +52,7 @@ function handleRegretAccept() {
   }
   showMsg(`悔了${steps}步棋`)
   chessBoard?.setCurrentRole('enemy')
+  refreshMoveInfo()
   regretModalVisible.value = false
   saveModalState({ regretModalVisible: regretModalVisible.value, regretModalType: regretModalType.value, drawModalVisible: drawModalVisible.value, drawModalType: drawModalType.value, endModalVisible: endModalVisible.value, endResult: endResult.value })
 }
@@ -209,6 +210,17 @@ function regret() {
 const currentTurn = ref<string>('—')
 const lastMove = ref<string>('无')
 const moveCount = ref(0)
+
+function refreshMoveInfo() {
+  const mh = chessBoard?.moveHistoryList || []
+  moveCount.value = mh.length
+  if (mh.length > 0) {
+    const last = mh[mh.length - 1]
+    lastMove.value = formatMoveLabel(last.from, last.to, last.pieceName, last.pieceColor)
+  } else {
+    lastMove.value = '无'
+  }
+}
 function formatMoveLabel(from: any, to: any, pieceName?: string, pieceColor?: string) {
   const chineseNums = ['零','一','二','三','四','五','六','七','八','九']
   const nameMap: Record<string,string> = {
@@ -507,6 +519,7 @@ onMounted(() => {
       }
       showMsg(`悔了${steps}步棋`)
       chessBoard?.setCurrentRole('self')
+      refreshMoveInfo()
       // showMsg(`对方同意悔棋${chessBoard.currentRole}`)
     }
     else {
